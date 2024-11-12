@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / compiled Python files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Tox and pytest files
+.tox/
+.pytest_cache/
+
+# Coverage reports
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.coverage
+.cache
+coverage/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Configuration files
+*.env
+.env.*
+
+# Logs
+*.log
+logs/
