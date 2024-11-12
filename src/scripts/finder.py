@@ -17,10 +17,8 @@ from datetime import datetime as dt
 from pathlib import Path
 from typing import Tuple, Literal
 
-import geopandas as gpd
-
 import pipeline
-from pipeline.utils import read_geojson, overlap_percent, indent
+from pipeline.utils import read_geojson, write_results, group_images_by_date
 from pipeline.extract.filters import FilterBuilder
 from pipeline.extract.search import SearchHandler
 
@@ -90,6 +88,7 @@ def main():
     # Overwrite logging levels with user specficed
     pipeline.config["log_level"] = log_level
     pipeline.config["api_key"] = api_key
+    pipeline.config["data_path"] = Path(os.getcwd()) / "data"
     pipeline.initialize()
     logger.info(f"starting {__file__} with: API key {api_key}")
 
@@ -97,12 +96,13 @@ def main():
     logger.info("Setting up the session with the API Key")
 
     aoi_feature = read_geojson(aoi)
+    aoi = [{"geometry": aoi_feature, "properties": None}]
 
     item_types = ["PSScene"]
     filter_builder = FilterBuilder("And")
     filter_dict = (filter_builder
                    .add_acquired_date_filter((date_range[0], date_range[1]))
-                   .add_cloud_cover_filter((0,15))
+                   .add_cloud_cover_filter((0,0.15))
                    .add_std_quality_filter()
                    .add_geometry_filter(aoi_feature)
                    ).build()
@@ -115,41 +115,16 @@ def main():
                                                search_filter=filter_dict,
                                                item_types=item_types)
                           )
-    print(request["id"])
     images = asyncio.run(searches.perform_search(request["id"]))
-    # for item in images:
-    #     print(item["id"], item["properties"]["item_type"], item["properties"]["acquired"])
+    search_name = request["name"]
+    write_results(images, Path(os.getcwd()) / f"{pipeline.config["data_path"]}/search_results/{search_name}.geojson")
+    
+    results = group_images_by_date(images, aoi, crs)
 
-    images_df = gpd.GeoDataFrame(columns=["id", "date", "coverage", "geometry"],
-                                 crs="EPSG:4326", 
-                                 geometry="geometry"
-                                 )
-    for image in images:
-        row = {"id": image["id"],
-               "date": dt.strptime(image["properties"]["acquired"], 
-                                   "%Y-%m-%dT%H:%M:%S.%fZ"
-                                   ).strftime("%Y-%m-%d"),
-               "geometry": image["geometry"],
-               "coverage": overlap_percent([{"geometry": aoi_feature, "properties": None}], 
-                                           [image],
-                                           epsg=crs
-                                           )
-        }
-        images_df = images_df._append(row,ignore_index=True)
-
-    print(images_df.head())
-    images_df = images_df.groupby("date")["id"].apply(list).reset_index()
-    images_df = images_df.rename(columns={"id": "ids"})
-
-    images_df["coverage"] = images_df["ids"].apply(
-            lambda ids: overlap_percent([{"geometry": aoi_feature, "properties": None}], 
-                                        [image for image in images if image["id"] in ids],
-                                        epsg=crs)
-    ) 
-
-    print(len(images_df["coverage"] >= 100))
-
-    print(images_df.head())
+    full_cov = results[results["coverage"] >= 100.00]
+    print(len(full_cov))
+    full_cov = results[results["coverage"] >= 100.00]
+    print(full_cov.head(50))
 
     if pipeline.deactivate() == 1:
         sys.exit(1)

@@ -21,12 +21,44 @@ import logging
 import logging.config
 from pathlib import Path
 from typing import Any, Dict, List
-from datetime import datetime
+from datetime import datetime as dt
 
 import geopandas as gpd
 
 
 logger = logging.getLogger("pipeline")
+
+
+def setup_data_path(path: Path):
+    """Setups up a directory to store data at path.
+    parameters:
+        path (Path): The directory where the data should be stored.
+    returns:
+        None
+    raises:
+        OSError: If there is an issue creating the directory
+    """
+    try:
+        path.mkdir(exist_ok=True)
+    except OSError as e:
+        logger.error(f"Error creating the data directory {path}: {e}")
+        raise
+
+    # Fill out data sub directories
+    search_results_dir = path / "search_results"
+    try:
+        search_results_dir.mkdir(exist_ok=True)
+    except OSError as e:
+        logger.error(f"Error creating the data directory {search_results_dir}: {e}")
+
+    images_dir = path / "images"
+    try:
+        images_dir.mkdir(exist_ok=True)
+    except OSError as e:
+        logger.error(f"Error creating the data directory {images_dir}: {e}")
+
+    
+
 
 
 def setup_logging(log_directory: Path=Path("logs"), level: str="DEBUG"):
@@ -57,7 +89,7 @@ def setup_logging(log_directory: Path=Path("logs"), level: str="DEBUG"):
         print(f"Error creating the logging directory. Storing logs in root.")
         log_directory = Path(os.getcwd())
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_directory / f"pylanet_{timestamp}.log"
 
     # read logging_conf.json
@@ -178,8 +210,8 @@ def overlap_percent(aoi: List[Dict[str, Any]],
                     epsg: str|int
                     ) -> float:
     """Determines the overlap percentage of the study area.
-    Uses geopandas to merge, clip and intersect the footprints
-    with the study area feature to get the percentage overlap.
+    Uses geopandas to merge, clip and intersect the footprint with the study 
+    area feature to get the percentage overlap.
 
     parameters:
         feature (Path): study area geojson
@@ -219,3 +251,69 @@ def overlap_percent(aoi: List[Dict[str, Any]],
 
     return coverage_percentage
     
+def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[str, Any]], crs: str|int) -> gpd.GeoDataFrame:
+    """Puts the results from a search into a geodataframe.
+    This functions makes an intial dataframe of id, date, coverage and geometry
+    for all the images, then groups by images taken on the same day. and 
+    recalculates the coverage percent of all the images over the aoi.
+
+    parameters:
+        results (Dict[str, Any]): The search results
+        crs (str|int): The coordinate reference system for the dataframe.
+    returns:
+        gpd.GeoDataFrame: Dataframe for the search results
+    raises:
+        None
+    """
+    # Initialize the dataframe
+    images_df = gpd.GeoDataFrame(columns=["id", "date", "coverage", "geometry"],
+                                 crs="EPSG:4326", 
+                                 geometry="geometry"
+                                 )
+    for image in results:
+        row = {"id": image["id"],
+               "date": dt.strptime(image["properties"]["acquired"], 
+                                   "%Y-%m-%dT%H:%M:%S.%fZ"
+                                   ).strftime("%Y-%m-%d"),
+               "geometry": image["geometry"],
+        }
+        images_df = images_df._append(row,ignore_index=True)
+
+    images_df = images_df.groupby("date")["id"].apply(list).reset_index()
+    images_df = images_df.rename(columns={"id": "ids"})
+
+    images_df["coverage"] = images_df["ids"].apply(
+            lambda ids: overlap_percent(aoi_feature, 
+                                        [image for image in results if image["id"] in ids],
+                                        epsg=crs)
+    ) 
+
+    return images_df
+
+
+def write_results(results: List[Dict[str, Any]], file_path: Path) -> List[Dict[str, Any]]:
+    """Write the results of an API call to a file.
+    Writes the JSON response from the API call to a file specified by the user.
+    This function uses the json library.
+
+    parameters:
+        results (List[Dict[str, Any]]): results to write to the file.
+        file_path (Path): path to where the output file should be written.
+    returns:
+        List[Dict[str, Any]: The results passed to the function.
+    raises:
+        FileNotFoundError: If the path to the file does not exist.
+    """
+    try:
+        with open(file_path, "w") as f:
+            json.dump(results, f, indent=4)
+        logger.info(f"Wrote search results to {file_path}")
+    except TypeError as e:
+        logger.error(f"Failed to write results to {file_path}: {e}")
+        raise
+    except IOError as e:
+        logger.error(f"Failed to write results to {file_path}: {e}")
+        raise
+
+    return results
+

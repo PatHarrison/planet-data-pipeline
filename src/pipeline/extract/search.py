@@ -70,7 +70,7 @@ class SearchHandler():
     async def delete_search(self, search_id: str|List[str]) -> str|List[str]:
         """Deletes a saved search.
         Uses the detele_search method from the data client to remove a saved
-        search from the list of saved search on planet. This will also reupdate
+        search from the list of saved search on planet. This will also reupdateseau
         the self.searches property in the handler.
 
         parameters:
@@ -205,7 +205,7 @@ class SearchHandler():
             async with Session() as sess:
                 try:
                     cl = sess.client("data")
-                    items = cl.run_search(search_id=search_id, limit=50)
+                    items = cl.run_search(search_id=search_id, limit=0)
                     item_list = [i async for i in items]
                     logger.info(f"Search done found {len(item_list)} images")
                     return item_list
