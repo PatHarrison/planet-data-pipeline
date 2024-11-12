@@ -1,20 +1,24 @@
 import os
 import logging
+from pathlib import Path
 
-from .utils import setup_logging, authenticate
+from .utils import setup_logging, authenticate, setup_data_path
 
 
 logger = logging.getLogger("pipeline")
 
 config = {
     "log_level": "DEBUG",
-    "api_key": None
+    "data_path": Path(os.getcwd()) / "data",
+    "api_key": None,
 }
 
 def initialize():
     """Initialize Pylanet project"""
     setup_logging(level=config["log_level"])
     authenticate(api_key=config["api_key"])
+    setup_data_path(path=config["data_path"])
+
 
 def deactivate() -> int:
     """Deletes the api key from the environment.
