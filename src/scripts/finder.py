@@ -116,8 +116,8 @@ def main():
                                                item_types=item_types)
                           )
     images = asyncio.run(searches.perform_search(request["id"]))
-    search_name = request["name"]
-    write_results(images, Path(os.getcwd()) / f"{pipeline.config["data_path"]}/search_results/{search_name}.geojson")
+    search_name = f"{request["name"]}_{request["id"]}_{dt.now().strftime("%y%m%d%H%M%S")}.geojson"
+    write_results(images, Path(os.getcwd()) / f"{pipeline.config["data_path"]}/search_results/{search_name}")
     
     results = group_images_by_date(images, aoi, crs)
 
@@ -130,7 +130,6 @@ def main():
         sys.exit(1)
     else:
         sys.exit(0)
-
 
 
 if __name__ == "__main__":
