@@ -24,6 +24,9 @@ from typing import Any, Dict, List
 from datetime import datetime as dt
 
 import geopandas as gpd
+from planet import reporting
+
+from pipeline.extract.order import OrderHandler
 
 
 logger = logging.getLogger("pipeline")
@@ -31,6 +34,7 @@ logger = logging.getLogger("pipeline")
 
 def setup_data_path(path: Path):
     """Setups up a directory to store data at path.
+
     parameters:
         path (Path): The directory where the data should be stored.
     returns:
@@ -58,9 +62,6 @@ def setup_data_path(path: Path):
         logger.error(f"Error creating the data directory {images_dir}: {e}")
 
     
-
-
-
 def setup_logging(log_directory: Path=Path("logs"), level: str="DEBUG"):
     """Sets up logging for the pipeline application.
     This function configures logging for the application including
@@ -152,8 +153,6 @@ def authenticate(api_key: str) -> str:
         os.environ["PL_API_KEY"] = api_key
         auth = os.environ["PL_API_KEY"]
     return auth
-
-
 
 
 def read_geojson(file_path: Path) -> Dict[str, Any]:
@@ -250,7 +249,8 @@ def overlap_percent(aoi: List[Dict[str, Any]],
     coverage_percentage = (clipped_area / aoi_area) * 100
 
     return coverage_percentage
-    
+
+
 def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[str, Any]], crs: str|int) -> gpd.GeoDataFrame:
     """Puts the results from a search into a geodataframe.
     This functions makes an intial dataframe of id, date, coverage and geometry
@@ -316,4 +316,3 @@ def write_results(results: List[Dict[str, Any]], file_path: Path) -> List[Dict[s
         raise
 
     return results
-

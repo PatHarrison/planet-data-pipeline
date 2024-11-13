@@ -8,8 +8,8 @@ Purpose:
     This module provides the search handler class
     data from the Planet API using the Planet SDK.
 
-    Functions
-        - create_search
+    Classes:
+        - SearchHandle
 """
 import asyncio
 import logging
@@ -38,7 +38,6 @@ class SearchHandler():
     async def _get_searches(self) -> List[str]:
         """Gets all the search ids for your planet account.
         Uses the list_searches method on the data client.
-
 
         parameters:
             None

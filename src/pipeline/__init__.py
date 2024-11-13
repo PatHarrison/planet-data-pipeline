@@ -10,7 +10,7 @@ logger = logging.getLogger("pipeline")
 config = {
     "log_level": "DEBUG",
     "data_path": Path(os.getcwd()) / "data",
-    "api_key": None,
+    "api_key": None
 }
 
 def initialize():

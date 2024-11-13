@@ -21,6 +21,7 @@ import pipeline
 from pipeline.utils import read_geojson, write_results, group_images_by_date
 from pipeline.extract.filters import FilterBuilder
 from pipeline.extract.search import SearchHandler
+from pipeline.extract.order import OrderBuilder, OrderHandler
 
 
 logger = logging.getLogger("pipeline")
@@ -122,9 +123,32 @@ def main():
     results = group_images_by_date(images, aoi, crs)
 
     full_cov = results[results["coverage"] >= 100.00]
+    print(full_cov["ids"])
     print(len(full_cov))
     full_cov = results[results["coverage"] >= 100.00]
     print(full_cov.head(50))
+
+    order_flag = input("Continue to composite order? [y/N] ")
+    if order_flag.upper() == "Y":
+        request = (OrderBuilder("SiteCFilling")
+                   .add_product(full_cov["ids"], "analytic_8b_sr_udm2",
+                                "PSScene")
+                   .add_reproject_tool(3005)
+                   .add_clip_tool(aoi_feature)
+                   .add_composite_tool()
+                   .add_delivery_config(archive_type="zip",
+                                        single_archive=True,
+                                        archive_filename="{{order_id}}.zip"
+                                        )
+                )
+        request_json = request.build()
+
+        order = OrderHandler(request_json).create_poll_and_download()
+
+        print(order)
+
+
+
 
     if pipeline.deactivate() == 1:
         sys.exit(1)
