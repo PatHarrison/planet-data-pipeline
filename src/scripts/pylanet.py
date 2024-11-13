@@ -71,15 +71,36 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
 
     args = parser.parse_args()
 
-    study_area: Path = Path(args.aoi)
+    try:
+        study_area: Path = Path(args.aoi)
+        if not study_area.exists():
+            raise FileNotFoundError("Cannot find {study_area}")
+        elif not study_area.is_file():
+            raise IsADirectoryError(f"The path {study_area} is a directory, not a file")
+    except (FileNotFoundError, IsADirectoryError) as e:
+        logger.error(f"Error setting study area: {e}")
+        sys.exit(1)
+    except ValueError as e:
+        logger.error(f"Invalid Path to AOI {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"An unexpected error occured setting up AOI with {study_area}. {e}")
+        sys.exit(1)
 
     if not args.apikey:
         parser.error("An API Key is required for Planet. Please provide as a"
                      "system environment variable `PLANET_API_KEY` or as a "
                      "parameter to the script.")
-    date_range = (dt.strptime(args.startdate, "%Y-%m-%d"),
-                  dt.strptime(args.enddate, "%Y-%m-%d")
-                  )
+    try:
+        date_range = (dt.strptime(args.startdate, "%Y-%m-%d"),
+                      dt.strptime(args.enddate, "%Y-%m-%d")
+                      )
+    except ValueError:
+        logger.error(f"Invlaid dates passed `{args.startdate}`,"
+                     f"`{args.enddate}` use YYYY-MM-DD Format"
+                     )
+        sys.exit(1)
+
     return args.apikey, study_area, args.loglevel, date_range, args.crs
 
 
