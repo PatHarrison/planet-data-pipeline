@@ -3,11 +3,11 @@
     "disable_existing_loggers": false,
     "formatters": {
         "standard": {
-            "format": "%(asctime)s [%(name)-7.7s] [%(levelname)-7.7s]   %(message)s",
+            "format": "%(asctime)s [%(name)-8.8s] [%(levelname)-7.7s]   %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S"
         },
         "detailed": {
-            "format": "%(asctime)s [%(name)-7.7s] [%(levelname)-7.7s]  %(module)s.%(funcName)s | %(message)s",
+            "format": "%(asctime)s [%(name)-8.8s] [%(levelname)-7.7s]  %(module)s.%(funcName)s | %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S"
         }
     },
@@ -27,7 +27,7 @@
     "loggers": {
         "pipeline": {
             "level": "DEBUG",
-            "handlers": ["fileHandler", "consoleHandler"],
+            "handlers": ["fileHandler"],
             "propagate": false
         }
     }

@@ -236,14 +236,17 @@ class OrderHandler():
             async with Session() as sess:
                 cl = OrdersClient(sess)
                 try:
-                    self.bar.update(state="creating")
-                    order_details = await cl.create_order(request=request)
-                    self.bar.update(state="created", order_id=order_details["id"])
-                    logger.debug(f"Created order: {order_details["id"]}")
+                    with self.bar as bar:
+                        bar.update(state="creating")
+                        order_details = await cl.create_order(request=request)
+                        bar.update(state="created", order_id=order_details["id"])
+                        logger.info(f"Created order: {order_details["id"]}")
 
-                    await cl.wait(order_details["id"], callback=self.bar.update_state)
+                        await cl.wait(order_details["id"], 
+                                      callback=bar.update_state,
+                                      max_attempts=0) # default 200 usually times out before getting to download and script will fail. 0=no limit
 
-                    return order_details
+                        return order_details
 
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")
@@ -304,11 +307,28 @@ class OrderHandler():
     async def create_poll_and_download(self):
         """Full create poll and download of an order.
         """
-        order = asyncio.run(self._create_order(self.request))
-        download_paths = asyncio.run(self._download_order(order["id"]))
+        order = await self._create_order(self.request)
+        download_paths = await self._download_order(order["id"])
         return download_paths
 
 
+async def concurrent_planet_order(row, crs, aoi_feature):
+    request = (OrderBuilder("SiteCFilling")
+               .add_product(row.ids,
+                            "analytic_8b_sr_udm2",
+                            "PSScene")
+               .add_reproject_tool(crs)
+               .add_clip_tool(aoi_feature)
+               .add_composite_tool()
+               .add_delivery_config(archive_type="zip",
+                                    single_archive=True,
+                                    archive_filename="{}.zip".format(row.date.replace("-",""))
+                                    )
+            )
+    request_json = request.build()
 
-        
+    order = await OrderHandler(request_json).create_poll_and_download()
+    logger.info(f"Downloaded order to {order}")
 
+async def run_concurrent_image_fetch(tasks):
+    await asyncio.gather(*tasks)

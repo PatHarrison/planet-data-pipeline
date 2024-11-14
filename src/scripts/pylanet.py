@@ -21,7 +21,7 @@ import pipeline
 from pipeline.utils import read_geojson, write_results, group_images_by_date
 from pipeline.extract.filters import FilterBuilder
 from pipeline.extract.search import SearchHandler
-from pipeline.extract.order import OrderBuilder, OrderHandler
+from pipeline.extract.order import concurrent_planet_order, run_concurrent_image_fetch
 
 
 logger = logging.getLogger("pipeline")
@@ -154,25 +154,30 @@ def main():
     order_flag = input("Continue to daily composite order? [y/n] ")
 
     if order_flag.upper() == "Y":
-        logger.info(f"Continuing to Order")
-        for row in full_cov[["ids", "date"]].itertuples(index=False):
-            request = (OrderBuilder("SiteCFilling")
-                       .add_product(row.ids,
-                                    "analytic_8b_sr_udm2",
-                                    "PSScene")
-                       .add_reproject_tool(crs)
-                       .add_clip_tool(aoi_feature)
-                       .add_composite_tool()
-                       .add_delivery_config(archive_type="zip",
-                                            single_archive=True,
-                                            archive_filename="{{order_id}}_{}.zip".format(row.date.replace("-",""))
-                                            )
-                    )
-            request_json = request.build()
-            print(request_json)
+        logger.info(f"Continuing to Ordering")
+        tasks = [
+                concurrent_planet_order(row, crs, aoi_feature)
+                for row in full_cov[["ids", "date"]].itertuples(index=False)
+        ]
 
-            order = OrderHandler(request_json).create_poll_and_download()
-            logger.info(f"Downloaded order to {order}")
+        asyncio.run(run_concurrent_image_fetch(tasks))
+        # for row in full_cov[["ids", "date"]].itertuples(index=False):
+        #     request = (OrderBuilder("SiteCFilling")
+        #                .add_product(row.ids,
+        #                             "analytic_8b_sr_udm2",
+        #                             "PSScene")
+        #                .add_reproject_tool(crs)
+        #                .add_clip_tool(aoi_feature)
+        #                .add_composite_tool()
+        #                .add_delivery_config(archive_type="zip",
+        #                                     single_archive=True,
+        #                                     archive_filename="{}.zip".format(row.date.replace("-",""))
+        #                                     )
+        #             )
+        #     request_json = request.build()
+        #
+        #     order = OrderHandler(request_json).create_poll_and_download()
+        #     logger.info(f"Downloaded order to {order}")
 
     sys.exit(pipeline.deactivate())
 
