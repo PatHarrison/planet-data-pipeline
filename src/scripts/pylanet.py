@@ -74,7 +74,7 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
     try:
         study_area: Path = Path(args.aoi)
         if not study_area.exists():
-            raise FileNotFoundError("Cannot find {study_area}")
+            raise FileNotFoundError(f"Cannot find {study_area}")
         elif not study_area.is_file():
             raise IsADirectoryError(f"The path {study_area} is a directory, not a file")
     except (FileNotFoundError, IsADirectoryError) as e:

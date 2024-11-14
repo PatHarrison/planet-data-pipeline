@@ -44,6 +44,9 @@ def setup_data_path(path: Path):
     """
     try:
         path.mkdir(exist_ok=True)
+    except NotADirectoryError as e:
+        logger.error(f"Error creating data directory. {e}")
+        raise
     except OSError as e:
         logger.error(f"Error creating the data directory {path}: {e}")
         raise
