@@ -3,6 +3,7 @@ import planet
 import json
 from pathlib import Path
 
+import pipeline
 from pipeline.utils import *
 
 
@@ -74,3 +75,73 @@ class TestAuthenticate():
         authenticate(api_key)
 
         assert os.environ["PL_API_KEY"] == "Testing"
+
+
+class TestSetupLogging():
+    """Tests the logging setup from config file"""
+    def test_valid_dir(self, tmp_path):
+        temp_dir = tmp_path / "logs_test"
+
+        # ensure dir does not already exist for test
+        assert os.path.exists(temp_dir) is False
+
+        setup_logging(temp_dir)
+
+        assert os.path.exists(temp_dir) is True
+        assert os.path.isdir(temp_dir) is True
+
+    def test_invalid_dir(self, tmp_path, capsys):
+        """Should print message that logs will be stored in root."""
+        temp_dir = tmp_path / "logs_:.test"
+
+        setup_logging(temp_dir)
+
+        results = capsys.readouterr()
+
+        assert results.out == "Error creating the logging directory. Storing logs in root.\n"
+        assert results.err == ""
+
+
+class TestReadGeoJson():
+    """Smoke test the read geojson function"""
+    def test_valid_geojson(self):
+        geometry = read_geojson(Path("T083_R019_W6.geojson"))
+
+        assert isinstance(geometry, dict)
+
+
+class TestPipelineInit():
+    """Tests pipeline init"""
+    def test_deactivate(self, api_key):        
+        # test setup
+        os.environ["PL_API_KEY"] = api_key
+
+        result = pipeline.deactivate()
+
+        assert result == 0
+
+    def test_already_deactivated(self):
+        result = pipeline.deactivate()
+        assert result != 0
+
+
+    def test_initialize(self, api_key, tmp_path):
+        temp_logs = tmp_path / "logs_test"
+        temp_data = tmp_path / "data"
+        config = {
+            "log_level": "DEBUG",
+            "log_path": temp_logs,
+            "data_path": temp_data,
+            "api_key": api_key
+        }
+
+        pipeline.initialize(config=config)
+
+        pipeline.deactivate()
+
+        assert os.path.exists(temp_data)
+        assert os.path.exists(temp_data / "images")
+        assert os.path.exists(temp_data / "search_results")
+
+        assert os.path.exists(temp_logs)
+

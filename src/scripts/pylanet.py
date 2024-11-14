@@ -149,12 +149,14 @@ def main():
     full_cov = results[results["coverage"] >= 100.00]
     print(full_cov.head(50))
 
-    order_flag = input("Continue to composite order? [y/N] ")
+    order_flag = input("Continue to daily composite order? [y/N] ")
+
     if order_flag.upper() == "Y":
         request = (OrderBuilder("SiteCFilling")
-                   .add_product(full_cov["ids"], "analytic_8b_sr_udm2",
+                   .add_product(full_cov["ids"],
+                                "analytic_8b_sr_udm2",
                                 "PSScene")
-                   .add_reproject_tool(3005)
+                   .add_reproject_tool(crs)
                    .add_clip_tool(aoi_feature)
                    .add_composite_tool()
                    .add_delivery_config(archive_type="zip",
