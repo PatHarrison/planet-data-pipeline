@@ -138,45 +138,43 @@ def main():
                                                item_types=item_types)
                           )
     images = asyncio.run(searches.perform_search(request["id"]))
-    search_name = f"{request["name"]}_{request["id"]}_{dt.now().strftime("%y%m%d%H%M%S")}.geojson"
-    write_results(images, Path(os.getcwd()) / f"{pipeline.config["data_path"]}/search_results/{search_name}")
+
+    search_time = dt.now().strftime("%y%m%d%H%M%S")
+    search_name = f"{request["name"]}_{request["id"]}_{search_time}.geojson"
+    search_out_dir = f"{pipeline.config["data_path"]}/search_results/{search_name}"
+    write_results(images, Path(os.getcwd()) / search_out_dir)
     
     results = group_images_by_date(images, aoi, crs)
 
     full_cov = results[results["coverage"] >= 100.00]
-    print(full_cov["ids"])
-    print(len(full_cov))
-    full_cov = results[results["coverage"] >= 100.00]
-    print(full_cov.head(50))
+    print(f"Number of days with full AOI coverage: {len(full_cov)}")
+    print(f"Details:\n {full_cov.head(99)}")
 
-    order_flag = input("Continue to daily composite order? [y/N] ")
+
+    order_flag = input("Continue to daily composite order? [y/n] ")
 
     if order_flag.upper() == "Y":
-        request = (OrderBuilder("SiteCFilling")
-                   .add_product(full_cov["ids"],
-                                "analytic_8b_sr_udm2",
-                                "PSScene")
-                   .add_reproject_tool(crs)
-                   .add_clip_tool(aoi_feature)
-                   .add_composite_tool()
-                   .add_delivery_config(archive_type="zip",
-                                        single_archive=True,
-                                        archive_filename="{{order_id}}.zip"
-                                        )
-                )
-        request_json = request.build()
+        logger.info(f"Continuing to Order")
+        for row in full_cov[["ids", "date"]].itertuples(index=False):
+            request = (OrderBuilder("SiteCFilling")
+                       .add_product(row.ids,
+                                    "analytic_8b_sr_udm2",
+                                    "PSScene")
+                       .add_reproject_tool(crs)
+                       .add_clip_tool(aoi_feature)
+                       .add_composite_tool()
+                       .add_delivery_config(archive_type="zip",
+                                            single_archive=True,
+                                            archive_filename="{{order_id}}_{}.zip".format(row.date.replace("-",""))
+                                            )
+                    )
+            request_json = request.build()
+            print(request_json)
 
-        order = OrderHandler(request_json).create_poll_and_download()
+            order = OrderHandler(request_json).create_poll_and_download()
+            logger.info(f"Downloaded order to {order}")
 
-        print(order)
-
-
-
-
-    if pipeline.deactivate() == 1:
-        sys.exit(1)
-    else:
-        sys.exit(0)
+    sys.exit(pipeline.deactivate())
 
 
 if __name__ == "__main__":
