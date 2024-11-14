@@ -117,8 +117,8 @@ class FilterBuilder:
             self.filters.append(
                 data_filter.range_filter(
                     "cloud_cover",
-                    gte=cloud_cover_range[0], 
-                    lte=cloud_cover_range[1]
+                    gt=cloud_cover_range[0], 
+                    lt=cloud_cover_range[1]
                 )
             )
 
@@ -149,22 +149,11 @@ class FilterBuilder:
             self.filters.append(
                 data_filter.range_filter(
                     "view_angle",
-                    gte=view_angle_range[0], 
-                    lte=view_angle_range[1]
+                    gt=view_angle_range[0], 
+                    lt=view_angle_range[1]
                 )
             )
 
-        return self
-
-    def add_permission_filter(self) -> FilterBuilder:
-        """Builds a permission filter so downloadable images are returned.
-
-        parameters:
-            None
-        returns:
-            FilterBuilder: Instance of the class
-        """
-        self.filters.append(data_filter.permission_filter())
         return self
 
     def add_std_quality_filter(self) -> FilterBuilder:

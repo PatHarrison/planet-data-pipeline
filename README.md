@@ -30,6 +30,16 @@ pip install .
 This will allow you to run the scripts. All dependencies are included
 when installing the pipeline in step 3.
 
+### Development Mode
+To install the pipeline in development mode, use:
+```bash
+pip install -e .[dev]
+```
+This will install the pipline package and scripts in an editable environment
+which allows you to make changes to the pipeline and run/test the changes.
+This will also include development only packages like pytest and
+pytest-asyncio.
+
 
 ## Configuration
 
@@ -39,7 +49,7 @@ The API key is availble under your profile settings on Planet.com
 
 The API key can be passed to the scripts:
 ```bash
-<script> --apikey <api_key>
+<script> --apikey <api_key> ...
 ```
 The script will set the key as and environment variable in your `PATH` so
 that the pipeline can automatically authenticate the sessions.
@@ -60,7 +70,7 @@ After installing the pipeline to the pip virtual environment, the endpoints
 are exposed in your path. This means that you are able to use the finder script
 like:
 ```bash
-finder
+pylanet
 ```
 to get more information of CLI options run:
 ```bash
@@ -69,6 +79,15 @@ to get more information of CLI options run:
 
 ### Example Commands
 ```bash
-finder 2024-08-25 2024-08-26 --apikey <api_key> --aoi T083_R019_W6.geojson --crs 3005 --loglevel INFO
+pylanet 2024-08-25 2024-08-26 --apikey <api_key> --aoi T083_R019_W6.geojson --crs 3005 --loglevel INFO
 ```
+
+### Running Tests
+This pipeline uses pytest for unit and integration testing. To use pytest,
+with a coverage report use:
+
+```bash
+pytest --cov
+```
+This will run all tests under the `tests/` directory.
 

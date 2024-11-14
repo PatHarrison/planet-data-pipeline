@@ -9,13 +9,14 @@ logger = logging.getLogger("pipeline")
 
 config = {
     "log_level": "DEBUG",
+    "log_path": Path("logs"),
     "data_path": Path(os.getcwd()) / "data",
     "api_key": None
 }
 
-def initialize():
+def initialize(config=config):
     """Initialize Pylanet project"""
-    setup_logging(level=config["log_level"])
+    setup_logging(config["log_path"], level=config["log_level"])
     authenticate(api_key=config["api_key"])
     setup_data_path(path=config["data_path"])
 

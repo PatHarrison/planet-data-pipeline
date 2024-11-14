@@ -10,9 +10,15 @@ setup(
         "geopandas"
         
     ],
+    extras_require={
+        "dev": [
+            "pytest", "pytest_asyncio", "pytest-mock",
+            "pytest-cov"
+        ],
+    },
     entry_points={
         "console_scripts": {
-            "finder = scripts.finder:main"
+            "pylanet = scripts.pylanet:main"
         }
     }
 )

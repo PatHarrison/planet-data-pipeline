@@ -71,15 +71,36 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
 
     args = parser.parse_args()
 
-    study_area: Path = Path(args.aoi)
+    try:
+        study_area: Path = Path(args.aoi)
+        if not study_area.exists():
+            raise FileNotFoundError(f"Cannot find {study_area}")
+        elif not study_area.is_file():
+            raise IsADirectoryError(f"The path {study_area} is a directory, not a file")
+    except (FileNotFoundError, IsADirectoryError) as e:
+        logger.error(f"Error setting study area: {e}")
+        sys.exit(1)
+    except ValueError as e:
+        logger.error(f"Invalid Path to AOI {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"An unexpected error occured setting up AOI with {study_area}. {e}")
+        sys.exit(1)
 
     if not args.apikey:
         parser.error("An API Key is required for Planet. Please provide as a"
                      "system environment variable `PLANET_API_KEY` or as a "
                      "parameter to the script.")
-    date_range = (dt.strptime(args.startdate, "%Y-%m-%d"),
-                  dt.strptime(args.enddate, "%Y-%m-%d")
-                  )
+    try:
+        date_range = (dt.strptime(args.startdate, "%Y-%m-%d"),
+                      dt.strptime(args.enddate, "%Y-%m-%d")
+                      )
+    except ValueError:
+        logger.error(f"Invlaid dates passed `{args.startdate}`,"
+                     f"`{args.enddate}` use YYYY-MM-DD Format"
+                     )
+        sys.exit(1)
+
     return args.apikey, study_area, args.loglevel, date_range, args.crs
 
 
@@ -128,12 +149,14 @@ def main():
     full_cov = results[results["coverage"] >= 100.00]
     print(full_cov.head(50))
 
-    order_flag = input("Continue to composite order? [y/N] ")
+    order_flag = input("Continue to daily composite order? [y/N] ")
+
     if order_flag.upper() == "Y":
         request = (OrderBuilder("SiteCFilling")
-                   .add_product(full_cov["ids"], "analytic_8b_sr_udm2",
+                   .add_product(full_cov["ids"],
+                                "analytic_8b_sr_udm2",
                                 "PSScene")
-                   .add_reproject_tool(3005)
+                   .add_reproject_tool(crs)
                    .add_clip_tool(aoi_feature)
                    .add_composite_tool()
                    .add_delivery_config(archive_type="zip",
