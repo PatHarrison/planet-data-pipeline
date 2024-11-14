@@ -54,7 +54,7 @@ class SearchHandler():
                 try:
                     searches = cl.list_searches()
                     searches_list = [search["id"] async for search in searches]
-                    logger.debug(f"Found the following saved searches: {searches_list}")
+                    # logger.debug(f"Found the following saved searches: {searches_list}")
                     return searches_list
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")

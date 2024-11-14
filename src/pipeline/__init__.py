@@ -36,7 +36,7 @@ def deactivate() -> int:
     """
     try:
         os.environ.pop("PL_API_KEY")
-        logger.debug(f"Removed PL_API_KEY from environment variables")
+        logger.info(f"Removed PL_API_KEY from environment variables")
     except KeyError as e:
         logger.warning(f"PL_API_KEY not found in environment. Failed to remove: {e}")
         return 1
