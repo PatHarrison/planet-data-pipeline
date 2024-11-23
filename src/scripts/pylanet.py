@@ -10,7 +10,6 @@ Purpose:
 """
 import asyncio
 import argparse
-import logging
 import os
 import sys
 from datetime import datetime as dt
@@ -25,9 +24,8 @@ from pipeline.extract.filters import FilterBuilder
 from pipeline.extract.search import SearchHandler
 from pipeline.extract.order import concurrent_planet_order, run_concurrent_image_fetch
 
-logger = logging.getLogger("pipeline")
 
-
+# Type Definitions
 LogLevelType = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
@@ -46,7 +44,7 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
             script as apikey, aoi, loglevel, start date, end date.
 
     Raises:
-        None: Will exit as failure (1) if unable to parse passed arguments.
+        None: Will exit with argparse.error
     """
     parser = argparse.ArgumentParser(
                 description=("Finder for planet images in a certain date range"
@@ -97,11 +95,9 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
             print(f"The path {study_area} is a directory, not a file")
             sys.exit(1)
     except (FileNotFoundError, IsADirectoryError) as e:
-        logger.error(f"Error setting study area: {e}")
-        sys.exit(1)
+        parser.error(f"Error setting study area: {e}")
     except ValueError as e:
-        logger.error(f"Invalid Path to AOI {e}")
-        sys.exit(1)
+        parser.error(f"Invalid Path to AOI {e}")
 
     if not args.apikey:
         parser.error("An API Key is required for Planet. Please provide as a"
@@ -112,10 +108,9 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
                       dt.strptime(args.enddate, "%Y-%m-%d")
                       )
     except ValueError:
-        logger.error(f"Invlaid dates passed `{args.startdate}`,"
+        parser.error(f"Invlaid dates passed `{args.startdate}`,"
                      f"`{args.enddate}` use YYYY-MM-DD Format"
                      )
-        sys.exit(1)
 
     return args.apikey, study_area, args.loglevel, date_range, args.crs
 
@@ -127,7 +122,6 @@ def main():
     pipeline.config["api_key"] = api_key
     pipeline.config["data_path"] = Path(os.getcwd()) / "data"
     pipeline.initialize()
-    logger.info(f"starting {__file__} with: API key {api_key}")
 
     aoi_feature = read_geojson(aoi)
     aoi = [{"geometry": aoi_feature, "properties": None}]
@@ -146,9 +140,6 @@ def main():
                    ).build()
 
     searches = SearchHandler(auth=auth)
-    # del_searches = asyncio.run(
-    #         searches.delete_search(asyncio.run(searches._get_searches())))
-    # print(del_searches)
     request = asyncio.run(searches.make_search(name="SiteCFilling", 
                                                search_filter=filter_dict,
                                                item_types=item_types)
@@ -170,7 +161,6 @@ def main():
     order_flag = input("Continue to daily composite order? [y/n] ")
 
     if order_flag.upper() == "Y":
-        logger.info(f"Continuing to Ordering")
         tasks = [
                 concurrent_planet_order(row, crs, aoi_feature, auth)
                 for row in full_cov[["ids", "date"]].itertuples(index=False)
