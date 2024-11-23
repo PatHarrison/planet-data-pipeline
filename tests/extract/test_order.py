@@ -1,5 +1,29 @@
-from pipeline.extract.order import OrderBuilder
-from pipeline.utils import indent
+from planet import OrdersClient
+
+from pipeline.extract.order import OrderBuilder, OrderHandler
+
+
+
+
+def test_list_order(mocker, api_key):
+    mock_list_orders = mocker.patch("planet.OrdersClient.list_orders")
+
+    mock_list_orders.return_value = iter([
+         {"id": "order-1", "state": "success"},
+         {"id": "order-2", "state": "failed"},
+     ])
+
+    result = OrderHandler.get_order("ad24227c-a365-42e8-831b-8c0b908e6c14")
+
+    # Assertions
+    assert len(result) == 2
+    assert result[0]["id"] == "order-1"
+    assert result[1]["state"] == "failed"
+
+    # Ensure the mock was called once
+    mock_list_orders.assert_called_once()
+
+
 
 
 class TestOrderBuilder():
@@ -58,6 +82,5 @@ class TestOrderBuilder():
                                         archive_filename="{{order_id}}.zip"
                                         )
                      ).build()
-        indent(order_seg)
 
         assert order_seg == expected_order_seg

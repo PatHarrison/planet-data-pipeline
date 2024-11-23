@@ -1,147 +1,203 @@
-import pytest
-import planet
+import os
 import json
+import pytest
+from datetime import datetime as dt
 from pathlib import Path
 
-import pipeline
-from pipeline.utils import *
+from pipeline import initialize
+from pipeline.utils import setup_data_paths, setup_logging, read_geojson
 
 
-class TestSetupDataPath():
-    """Tests utils.setup_data_path function."""
-    def test_valid(self, tmp_path):
-        """Tests valid path.
-        tmpdir is a built in fixture for testing directory creation in
-        scripts.
+class Test_setup_data_paths():
+    """
+    Tests for setup_data_paths.
+    """
+    @pytest.mark.smoke
+    def test_valid_directory(self, tmp_path):
         """
-        temp_dir = tmp_path / "data_test"
+        Test for ensuring a a valid directory is created from
+        setup_data_paths. The built-in tmp path fixture is used
+        to automatically tear down the created directory after
+        the test is complete.
 
-        # ensure dir does not already exist for test
-        assert os.path.exists(temp_dir) is False
-
-        setup_data_path(temp_dir)
-
-        assert os.path.exists(temp_dir) is True
-        assert os.path.isdir(temp_dir) is True
-
-        assert os.path.exists(temp_dir / "images") is True
-        assert os.path.isdir(temp_dir / "images") is True
-
-        assert os.path.exists(temp_dir / "search_results") is True
-        assert os.path.isdir(temp_dir / "search_results") is True
-    
-    def test_invalid(self):
-        """Tests valid path.
-        tmpdir is a built in fixture for testing directory creation in
-        scripts.
+        Given:
+            - No directory or file with the same name exists in the path
+            - the argument is a valid path object
+        Verifies:
+            - A directory is created at the specified location
+            - The returned path is a valid directory
         """
-        with pytest.raises(NotADirectoryError):
-            setup_data_path(Path("test_:.data"))
+        dir_name = tmp_path / "data_test"
+
+        path = setup_data_paths(dir_name)
+
+        assert path.exists()
+        assert path.is_dir()
+
+        assert os.path.exists(path / "images")
+        assert os.path.exists(path / "search_results")
+
+        assert os.path.isdir(path / "images")
+        assert os.path.isdir(path / "search_results")
+
+    @pytest.mark.parametrize("data_path", [
+        ("bad_path"),
+        (100),
+        (1.0),
+        (True),
+    ])
+    def test_bad_arguments(self, data_path):
+        """
+        Test for ensuring that a path object must be given
+        or a Value Error will be thrown.
+
+        Given:
+            - No directory or file with the same name exists in the path
+            - the argument is not a valid path object
+        Verifies:
+            - Value error is thrown
+        """
+        dir_name = data_path
+        
+        with pytest.raises(ValueError):
+            setup_data_paths(dir_name)
+
+    def test_directory_already_exists(self, tmp_path):
+        """
+        Test for ensuring that if a directory already exists, the function
+        will skip creation.
+
+        Given:
+            - A valid data directory exists already in the path
+            - The argument is a valid path object
+        Verifies:
+            - The data will not be over written in the data folder
+            - The returned path is a valid directory
+        """
+        dir_name = tmp_path / "data_test"
+        test_file = Path(dir_name) / "test_file"
+
+        os.mkdir(dir_name)
+        test_file.touch()
+
+        path = setup_data_paths(dir_name)
+
+        assert path.exists()
+        assert path.is_dir()
+
+        assert os.path.exists(path / "images")
+        assert os.path.exists(path / "search_results")
+
+        assert os.path.isdir(path / "images")
+        assert os.path.isdir(path / "search_results")
+
+        assert os.path.isfile(test_file)
+
+    def test_data_directory_to_overwrite_file(self, tmp_path):
+        """
+        Test for ensuring that if a directory already exists as a file,
+        an exception will be raised
+
+        Given:
+            - A valid path is passed but already is a file.
+            - The argument is a valid path object
+        Verifies:
+            - An Exception is thrown
+        """
+        test_file = Path(tmp_path) / "test_file"
+        test_file.touch()
+
+        with pytest.raises(FileExistsError):
+            path = setup_data_paths(test_file)
 
 
-class TestIndent():
-    """Test the indent function"""
-    def test_valid_json(self, capsys):
-        """Tests valid indent"""
-        data = {"a": 1.0, "b": 2, "c": [1,2,3]}
-        expected_out = "{\n  \"a\": 1.0,\n  \"b\": 2,\n  \"c\": [\n    1,\n    2,\n    3\n  ]\n}\n"
+class Test_setup_logging():
+    """
+    Tests for the setup logging function
+    """
+    @pytest.mark.smoke
+    def test_valid_config(self, tmp_path):
+        """
+        Ensures that the log path is setup correctly and loggers are
+        returned.
 
-        indent(data)
+        Given:
+            - A valid logging_config.json file
+            - A valid logging level string
+        Verifies:
+            - A directory is created at the specified location
+        """
+        dir_name = tmp_path / "logs_test"
+
+        setup_logging(dir_name)
+
+        assert os.path.exists(dir_name)
+        assert os.path.isdir(dir_name)
+
+    @pytest.mark.parametrize("data_path", [
+        ("bad_path"),
+        (100),
+        (1.0),
+        (True),
+    ])
+    def test_bad_arguments(self, data_path, capsys, delete_log_file):
+        """
+        Test for ensuring that a path object must be given
+        or a Value Error will be thrown.
+
+        Given:
+            - No directory or file with the same name exists in the path
+            - the argument is not a valid path object
+        Verifies:
+            - Value error is thrown
+        """
+        dir_name = data_path
+        
+        setup_logging(dir_name)
 
         captured = capsys.readouterr()
 
-        assert captured.out == expected_out
+        assert captured.out == f"Error creating logging config. defaulting to cwd. Data path given must be of type Path not {dir_name}\n"
 
 
-class TestAuthenticate():
-    """Test the authenticate util method."""
-    def test_no_initial_key(self, api_key):
-        """Tests setting the api key to an environment var"""
-
-        # Test that no key is set
-        with pytest.raises(KeyError):
-            os.environ["PL_API_KEY"]
-
-        authenticate(api_key)
-
-        assert os.environ["PL_API_KEY"] == api_key
-
-    def test_no_overwrite_if_exists(self, api_key):
-        """Tests setting the api key to an environment var"""
-
-        # Test that no key is set
-        os.environ["PL_API_KEY"] = "Testing"
-
-        authenticate(api_key)
-
-        assert os.environ["PL_API_KEY"] == "Testing"
-
-
-class TestSetupLogging():
-    """Tests the logging setup from config file"""
-    def test_valid_dir(self, tmp_path):
-        temp_dir = tmp_path / "logs_test"
-
-        # ensure dir does not already exist for test
-        assert os.path.exists(temp_dir) is False
-
-        setup_logging(temp_dir)
-
-        assert os.path.exists(temp_dir) is True
-        assert os.path.isdir(temp_dir) is True
-
-    def test_invalid_dir(self, tmp_path, capsys):
-        """Should print message that logs will be stored in root."""
-        temp_dir = tmp_path / "logs_:.test"
-
-        setup_logging(temp_dir)
-
-        results = capsys.readouterr()
-
-        assert results.out == "Error creating the logging directory. Storing logs in root.\n"
-        assert results.err == ""
+class Test_initialize():
+    """
+    Tests for the pipeline initialization
+    """
+    @pytest.mark.smoke
+    def test_valid_initialize(self):
+        assert initialize()
 
 
 class TestReadGeoJson():
     """Smoke test the read geojson function"""
-    def test_valid_geojson(self):
-        geometry = read_geojson(Path("T083_R019_W6.geojson"))
+    @pytest.mark.smoke
+    def test_valid_geojson(self, test_geojson):
+        path, data = test_geojson
+        geometry = read_geojson(path)
 
-        assert isinstance(geometry, dict)
+        assert geometry == data["features"][0]["geometry"]
+
+    def test_invlaid_geojson(self, test_bad_geojson):
+        path, data = test_bad_geojson
+
+        with pytest.raises(KeyError):
+            geometry = read_geojson(path)
+
+    def test_invlaid_geojson_geometry(self, test_bad_geojson_geometry):
+        path, data = test_bad_geojson_geometry
+
+        with pytest.raises(KeyError):
+            geometry = read_geojson(path)
+
+    def test_invalid_json(self, test_badjson_geojson):
+        path, data = test_badjson_geojson
+        with pytest.raises(json.JSONDecodeError):
+            geometry = read_geojson(path)
+        
 
 
-class TestPipelineInit():
-    """Tests pipeline init"""
-    def test_deactivate(self, api_key):        
-        # test setup
-        os.environ["PL_API_KEY"] = api_key
-
-        result = pipeline.deactivate()
-
-        assert result == 0
-
-    def test_already_deactivated(self):
-        result = pipeline.deactivate()
-        assert result != 0
 
 
-    def test_initialize(self, api_key, tmp_path):
-        temp_logs = tmp_path / "logs_test"
-        temp_data = tmp_path / "data"
-        config = {
-            "log_level": "DEBUG",
-            "log_path": temp_logs,
-            "data_path": temp_data,
-            "api_key": api_key
-        }
 
-        pipeline.initialize(config=config)
-
-        pipeline.deactivate()
-
-        assert os.path.exists(temp_data)
-        assert os.path.exists(temp_data / "images")
-        assert os.path.exists(temp_data / "search_results")
-
-        assert os.path.exists(temp_logs)
 

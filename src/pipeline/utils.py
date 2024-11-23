@@ -15,166 +15,167 @@ Purpose:
         - indent
         - read_geojson
 """
+import logging
 import os
 import json
-import logging
+from datetime import datetime as dt
+from typing import Any, Dict, List
 import logging.config
 from pathlib import Path
-from typing import Any, Dict, List
-from datetime import datetime as dt
 
 import geopandas as gpd
-from planet import reporting
 
-from pipeline.extract.order import OrderHandler
+import pipeline
 
 
 logger = logging.getLogger("pipeline")
 
 
-def setup_data_path(path: Path):
-    """Setups up a directory to store data at path.
-
-    parameters:
-        path (Path): The directory where the data should be stored.
-    returns:
-        None
-    raises:
-        OSError: If there is an issue creating the directory
+def setup_data_paths(path: Path) -> Path:
     """
-    try:
-        path.mkdir(exist_ok=True)
-    except NotADirectoryError as e:
-        logger.error(f"Error creating data directory. {e}")
-        raise
-    except OSError as e:
-        logger.error(f"Error creating the data directory {path}: {e}")
-        raise
+    Setups up a directory to store data with sub directories.
+
+    Args:
+        path (Path): Path to the data directory
+
+    Returns:
+        None
+    
+    Raises:
+        ValueError: If log_directory is not a Path object.
+        FileExistsError: If logging directory exists as a file.
+        OSError: Error from OS when trying to create directory
+    """
+    if not isinstance(path, Path):
+        raise ValueError("Data path given must be of type Path not {path}")
+    path.mkdir(exist_ok=True, parents=True) 
 
     # Fill out data sub directories
     search_results_dir = path / "search_results"
-    try:
-        search_results_dir.mkdir(exist_ok=True)
-    except OSError as e:
-        logger.error(f"Error creating the data directory {search_results_dir}: {e}")
+    search_results_dir.mkdir(exist_ok=True, parents=True)
 
     images_dir = path / "images"
-    try:
-        images_dir.mkdir(exist_ok=True)
-    except OSError as e:
-        logger.error(f"Error creating the data directory {images_dir}: {e}")
+    images_dir.mkdir(exist_ok=True, parents=True)
 
+    return path
+
+
+def create_log_path(log_directory: Path) -> Path:
+    """
+    Creates a logging directory to store pipeline logs.
+    The function will create all non-existent parent directories
+    if the do not exist yet. If the logging directory exists it
+    will pass creating a copy or overwritting existing logs.
     
-def setup_logging(log_directory: Path=Path("logs"), level: str="DEBUG"):
-    """Sets up logging for the pipeline application.
+    Args:
+        log_directory (Path): Path to the logging directory
+
+    Returns:
+        (Path): Path to the created logging directory.
+
+    Raises:
+        ValueError: If log_directory is not a Path object.
+        FileExistsError: If logging directory exists as a file.
+        OSError: Error from OS when trying to create directory
+    """
+    if not isinstance(log_directory, Path):
+        raise ValueError(f"Data path given must be of type Path not {log_directory}")
+    log_directory.mkdir(exist_ok=True, parents=True) 
+
+    return log_directory
+
+
+def setup_logging(log_dir: Path, level: str="DEBUG"):
+    """
+    Sets up logging for the pipeline application.
     This function configures logging for the application including
     creating a log directory (if it does not exist) and generates a
     time stamped log file name. Log levels can also be passed here.
+    If creating the log store fails, then the cwd will be used.
 
-    parameters:
+    Args:
         log_directory (Path): The directory where the log files should be
-                              stored. The default is 'logs/'
+            stored. The default is 'logs/'
         level (str): The log level string representation for the logging
-                     Currently, only one log level is supported for all
-                     handlers
-    returns:
+             Currently, only one log level is supported for all handlers.
+
+    Returns:
         None
-    raises:
-        FileNotFoundError: If the logging configuration file cannot be found.
-        json.JSONDecodeError: If the logging configuration file is not a valid
-                              JSON.
-        KeyError: If the expected keys are not present in the logging config
-                  file.
-        OSError: If there is an issue creating the directory
+
+    Raises:
+        KeyError: If the expected keys are not present in the logging config 
+            file.
     """
+    log_directory = Path(os.getcwd())
     try:
-        log_directory.mkdir(exist_ok=True) # log directory
-    except OSError as e:
-        print(f"Error creating the logging directory. Storing logs in root.")
-        log_directory = Path(os.getcwd())
+        log_directory = create_log_path(log_dir)
+    except Exception as e:
+        print(f"Error creating logging config. defaulting to cwd. {e}")
 
     timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_directory / f"pylanet_{timestamp}.log"
 
-    # read logging_conf.json
-    config_path = Path(os.getcwd()) / "logging_config.json"
+    config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "%(asctime)s [%(name)-8.8s] [%(levelname)-7.7s]   %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+            "detailed": {
+                "format": "%(asctime)s [%(name)-8.8s] [%(levelname)-7.7s]  %(module)s.%(funcName)s | %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            }
+        },
+        "handlers": {
+            "consoleHandler": {
+                "class": "logging.StreamHandler",
+                "level": "DEBUG",
+                "formatter": "standard"
+            },
+            "fileHandler": {
+                "class": "logging.FileHandler",
+                "level": "DEBUG",
+                "formatter": "detailed",
+                "filename": "pylanet.log"
+            }
+        },
+        "loggers": {
+            "pipeline": {
+                "level": "DEBUG",
+                "handlers": ["fileHandler"],
+                "propagate": False
+            }
+        }
+    }
 
-    try:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-            config["handlers"]["fileHandler"]["filename"] = log_file
-            config["loggers"]["pipeline"]["level"] = level
-            config["handlers"]["fileHandler"]["level"] = level
-            config["handlers"]["consoleHandler"]["level"] = level
-            logging.config.dictConfig(config)
-
-    except FileNotFoundError:
-        print(f"The logging configuration file '{config_path}' was not found")
-        raise
-    except json.JSONDecodeError:
-        print(f"Failed to decode JSON in {config_path}")
-        raise
-    except KeyError as e:
-        print(f"Error: Missing expected key in logging config: {e}")
-        raise
-
-
-def indent(data: Dict[Any, Any]):
-    """Pretty printing for dictionary data.
-    Prints the dictionary to stdout with and indent level for
-    human readablilty. Uses json.dumps method to convert the
-    dictionary to valid JSON
-
-    parameters:
-        data (Dict): Data dictionary to be printed nicely.
-    returns:
-        None
-    Raises:
-        TypeError: If the provided data is not a dict. 
-        json.JSONDecodeError: If the data cannot be converted into
-                              a dictionary
-    """
-    try:
-        print(json.dumps(data, indent=2))
-    except TypeError as e:
-        logging.warning(f"Unable to print {data} in JSON form. {e}")
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON encoding error: {e}")
-
-
-def authenticate(api_key: str) -> str:
-    """Stores API in environment variable.
-    
-    parameter:
-        api_key (str): Planet API key for authentication.
-    returns
-        str: Planet API key for authentication from environment vars.
-    """
-    if "PL_API_KEY" in os.environ:
-        auth = os.environ["PL_API_KEY"]
-    else:
-        os.environ["PL_API_KEY"] = api_key
-        auth = os.environ["PL_API_KEY"]
-    return auth
+    config["handlers"]["fileHandler"]["filename"] = log_file
+    config["loggers"]["pipeline"]["level"] = level
+    config["handlers"]["fileHandler"]["level"] = level
+    config["handlers"]["consoleHandler"]["level"] = level
+    logging.config.dictConfig(config)
 
 
 def read_geojson(file_path: Path) -> Dict[str, Any]:
-    """Reads a GeoJSON file and returns its contents as a dictionary.
-    Checks if 'features' and 'geometry' keys are present in the file
-    before attempting returning dictionary. An empty dictionary is
-    returned if the file is unreachable or invalid.
+    """
+    Reads a GeoJSON file and returns its contents as a dictionary.
+    Checks if 'features' and 'geometry' keys are present in the file before 
+    attempting returning dictionary. An empty dictionary is returned if the 
+    file is unreachable or invalid.
 
-    Parameters:
+    Args:
         file_path (Path): Path to the GeoJSON file to read.
+
     Returns:
         Dict[str, Any]: dictionary representation of the geometry of the first
                         feature in the GeoJSON file. Returns an empty dictionay
                         if an error occurs or if the geometry data is missing.
+
     Raises:
         FileNotFoundError: If the specified file cannot be found.
         json.JSONDecodeError: If the file contains invlaud JSON.
         KeyError: if the expected 'features' or 'geometry' is missing.
-        Exception: If an unexpected error occurs.
     """
     try:
         with open(file_path, 'r', encoding="utf-8") as geojson_file:
@@ -188,38 +189,34 @@ def read_geojson(file_path: Path) -> Dict[str, Any]:
                 return geometry
             else:
                 logger.error(f"Geometry data not found in the first feature of {file_path}")
-                return {}
+                raise KeyError
         else:
             logger.error(f"Features data not found in {file_path}")
-            return {}
+            raise KeyError("No features found in gson")
 
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
-        return {}
+        raise
     except json.JSONDecodeError:
         logger.error(f"Error decoding JSON in file: {file_path}")
-        return {}
-    except KeyError as e:
-        logger.error(f"Missing key in GeoJSON data: {e}")
-        return {}
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
-        return {}
+        raise
 
 
 def overlap_percent(aoi: List[Dict[str, Any]],
                     footprints: List[Dict[str, Any]],
                     epsg: str|int
                     ) -> float:
-    """Determines the overlap percentage of the study area.
+    """
+    Determines the overlap percentage of the study area.
     Uses geopandas to merge, clip and intersect the footprint with the study 
     area feature to get the percentage overlap.
 
-    parameters:
+    Args:
         feature (Path): study area geojson
         footprints (geojson features): geosjon features of the footprints.
         espg (str|int): ESPG identifier number. `3005` for ESPG:3005.
-    returns:
+
+    Returns:
         (float): coverage percentage of the found footprints with the 
             study area.
     """
@@ -255,17 +252,20 @@ def overlap_percent(aoi: List[Dict[str, Any]],
 
 
 def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[str, Any]], crs: str|int) -> gpd.GeoDataFrame:
-    """Puts the results from a search into a geodataframe.
+    """
+    Puts the results from a search into a geodataframe.
     This functions makes an intial dataframe of id, date, coverage and geometry
     for all the images, then groups by images taken on the same day. and 
     recalculates the coverage percent of all the images over the aoi.
 
-    parameters:
+    Args:
         results (Dict[str, Any]): The search results
         crs (str|int): The coordinate reference system for the dataframe.
-    returns:
+
+    Returns:
         gpd.GeoDataFrame: Dataframe for the search results
-    raises:
+
+    Raises:
         None
     """
     # Initialize the dataframe
@@ -294,28 +294,33 @@ def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[s
     return images_df
 
 
-def write_results(results: List[Dict[str, Any]], file_path: Path) -> List[Dict[str, Any]]:
-    """Write the results of an API call to a file.
+def write_results(results: List[Dict[str, Any]], search_name: str) -> List[Dict[str, Any]]:
+    """
+    Write the results of an API call to a file.
     Writes the JSON response from the API call to a file specified by the user.
     This function uses the json library.
 
-    parameters:
+    Args:
         results (List[Dict[str, Any]]): results to write to the file.
         file_path (Path): path to where the output file should be written.
-    returns:
+
+    Returns:
         List[Dict[str, Any]: The results passed to the function.
-    raises:
+
+    Raises:
         FileNotFoundError: If the path to the file does not exist.
     """
+    search_time = dt.now().strftime("%y%m%d%H%M%S")
+    search_out_dir = f"{pipeline.config["data_path"]}/search_results/{search_name}"
     try:
-        with open(file_path, "w") as f:
+        with open(search_out_dir, "w") as f:
             json.dump(results, f, indent=4)
-        logger.info(f"Wrote search results to {file_path}")
+        logger.info(f"Wrote search results to {search_out_dir}")
     except TypeError as e:
-        logger.error(f"Failed to write results to {file_path}: {e}")
+        logger.error(f"Failed to write results to {search_out_dir}: {e}")
         raise
     except IOError as e:
-        logger.error(f"Failed to write results to {file_path}: {e}")
+        logger.error(f"Failed to write results to {search_out_dir}: {e}")
         raise
 
     return results

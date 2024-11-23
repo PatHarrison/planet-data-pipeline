@@ -1,12 +1,12 @@
 """
 Title: Filters
-Project: planet-data-pipeline
 Authors:
     - Patrick Harrison
     - Lee-Anna Gibson
 Purpose:
-    This module contains the filter builder class
-    to create planet api filter requests segments.
+    This module contains the filter builder class to create planet api filter 
+    requests segments. Not all available filters are implemented in the filter 
+    builder however enough are for our purposes.
 
     Classes
         - FilterBuilder
@@ -23,16 +23,18 @@ logger = logging.getLogger("pipeline")
 
 
 class FilterBuilder:
-    """Builder pattern class for building filters"""
+    """
+    Builder pattern class for building filters for the planet API.
+    """
     def __init__(self, filter_type: str="And"):
-        """Filter Builder Constructor.
+        """
+        Filter Builder Constructor.
         Setups up a list of filters to add to the filter type.
 
-        parameters:
+        Args:
             filter_type (str): Type of filter builder [And|Or].
-        returns:
-            None
-        raises:
+
+        Returns:
             None
         """
         self.filter_type = filter_type
@@ -48,16 +50,18 @@ class FilterBuilder:
     def add_acquired_date_filter(self,
             date_range: Tuple[dt, dt], inclusive: bool=True
     ) -> FilterBuilder:
-        """Builds a datetime filter from user given bounds.
+        """
+        Builds a datetime filter from user given bounds.
         date time objects must be in RFC 3339 format according to the Planet
         API documentation. This should be handled by the planet SDK by just
         passing the datetime objects.
 
-        parameters:
+        Args:
             date_range (Tuple[datetime, datetime]): time range for aquisition
                 of the imagery (start, end).
             inclusive (bool): Specifies if the bounds are inclusive or exclusive.
-        returns:
+
+        Returns:
             FilterBuilder: Instance of the class
         """
         if inclusive:
@@ -79,14 +83,16 @@ class FilterBuilder:
         return self
 
     def add_geometry_filter(self, aoi: Dict) -> FilterBuilder:
-        """Build a geometry filter from user specified feature.
+        """
+        Build a geometry filter from user specified feature.
         The filter support Point, MultiPoint, LineString, MultiLineString,
         Polygon, and MultiPolygon in GeoJSON format. The API will attempt
         to correct geometry if GeoJSON is invalid.
 
-        parameters:
+        Args:
             geojson_feature (Dict): geojson format of the feature to use.
-        returns:
+
+        Returns:
             FilterBuilder: Instance of the class
         """
         self.filters.append(data_filter.geometry_filter(aoi))
@@ -95,14 +101,16 @@ class FilterBuilder:
     def add_cloud_cover_filter(self,
             cloud_cover_range: Tuple[float, float], inclusive: bool=True
     ) -> FilterBuilder:
-        """Builds a cloud cover filter from user given bounds.
+        """
+        Builds a cloud cover filter from user given bounds.
         Uses the data_filter.range_filter function to build the filter.
         
-        parameters:
+        Args:
             cloud_cover_range (Tuple[float, float]): cloud cover bounds (minimum, maximum)
                 between 0 and 1.
             inclusive (bool): Specifies if the bounds are inclusive or exclusive.
-        returns:
+
+        Returns:
             FilterBuilder: Instance of the class
         """
         if inclusive:
@@ -127,14 +135,16 @@ class FilterBuilder:
     def add_view_angle_filter(self, 
             view_angle_range: Tuple[float, float], inclusive: bool=True
     ) -> FilterBuilder:
-        """Builds a view angle filter from user given bounds.
+        """
+        Builds a view angle filter from user given bounds.
         Uses the data_filter.range_filter function to build the filter.
         
-        parameters:
+        Args:
             view_angle_range (Tuple[float, float]): view angle bounds (minimum, maximum)
                 between -60 and 60.
             inclusive (bool): Specifies if the bounds are inclusive or exclusive.
-        returns:
+
+        Returns:
             FilterBuilder: Instance of the class
         """
         if inclusive:
@@ -157,22 +167,26 @@ class FilterBuilder:
         return self
 
     def add_std_quality_filter(self) -> FilterBuilder:
-        """Builds a quality filter to only get standard quality images.
+        """
+        Builds a quality filter to only get standard quality images.
 
-        parameters:
+        Args:
             qualities (List[str]): qualities of products to retreive
-        returns:
+
+        Returns:
             FilterBuilder: Instance of the class
         """
         self.filters.append(data_filter.std_quality_filter())
         return self
 
     def add_instrument_filter(self, instruments: List[str]) -> FilterBuilder:
-        """Builds an instrumnet filter.
+        """
+        Builds an instrumnet filter.
 
-        parameters:
+        Args:
             intruments (List[str]): Instruments to retrieve data from.
-        returns:
+
+        Returns:
             FilterBuilder: Instance of the class
         """
         self.filters.append(
@@ -183,3 +197,17 @@ class FilterBuilder:
         )
         return self
 
+    def add_permission_filter(self) -> FilterBuilder:
+        """
+        Builds a permission filter
+
+        Args:
+            None
+
+        Returns:
+            FilterBuilder: Instance of the class
+        """
+        self.filters.append(
+                data_filter.permission_filter()
+        )
+        return self

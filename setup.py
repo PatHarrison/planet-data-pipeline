@@ -12,8 +12,10 @@ setup(
     ],
     extras_require={
         "dev": [
-            "pytest", "pytest_asyncio", "pytest-mock",
-            "pytest-cov"
+            "pytest",
+            "pytest_asyncio",
+            "pytest-mock",
+            "pytest-cov",
         ],
     },
     entry_points={
