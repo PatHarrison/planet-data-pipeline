@@ -25,6 +25,8 @@ from pathlib import Path
 
 import geopandas as gpd
 
+import pipeline
+
 
 logger = logging.getLogger("pipeline")
 
@@ -162,12 +164,14 @@ def read_geojson(file_path: Path) -> Dict[str, Any]:
     attempting returning dictionary. An empty dictionary is returned if the 
     file is unreachable or invalid.
 
-    Parameters:
+    Args:
         file_path (Path): Path to the GeoJSON file to read.
+
     Returns:
         Dict[str, Any]: dictionary representation of the geometry of the first
                         feature in the GeoJSON file. Returns an empty dictionay
                         if an error occurs or if the geometry data is missing.
+
     Raises:
         FileNotFoundError: If the specified file cannot be found.
         json.JSONDecodeError: If the file contains invlaud JSON.
@@ -202,15 +206,17 @@ def overlap_percent(aoi: List[Dict[str, Any]],
                     footprints: List[Dict[str, Any]],
                     epsg: str|int
                     ) -> float:
-    """Determines the overlap percentage of the study area.
+    """
+    Determines the overlap percentage of the study area.
     Uses geopandas to merge, clip and intersect the footprint with the study 
     area feature to get the percentage overlap.
 
-    parameters:
+    Args:
         feature (Path): study area geojson
         footprints (geojson features): geosjon features of the footprints.
         espg (str|int): ESPG identifier number. `3005` for ESPG:3005.
-    returns:
+
+    Returns:
         (float): coverage percentage of the found footprints with the 
             study area.
     """
@@ -246,17 +252,20 @@ def overlap_percent(aoi: List[Dict[str, Any]],
 
 
 def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[str, Any]], crs: str|int) -> gpd.GeoDataFrame:
-    """Puts the results from a search into a geodataframe.
+    """
+    Puts the results from a search into a geodataframe.
     This functions makes an intial dataframe of id, date, coverage and geometry
     for all the images, then groups by images taken on the same day. and 
     recalculates the coverage percent of all the images over the aoi.
 
-    parameters:
+    Args:
         results (Dict[str, Any]): The search results
         crs (str|int): The coordinate reference system for the dataframe.
-    returns:
+
+    Returns:
         gpd.GeoDataFrame: Dataframe for the search results
-    raises:
+
+    Raises:
         None
     """
     # Initialize the dataframe
@@ -285,28 +294,33 @@ def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[s
     return images_df
 
 
-def write_results(results: List[Dict[str, Any]], file_path: Path) -> List[Dict[str, Any]]:
-    """Write the results of an API call to a file.
+def write_results(results: List[Dict[str, Any]], search_name: str) -> List[Dict[str, Any]]:
+    """
+    Write the results of an API call to a file.
     Writes the JSON response from the API call to a file specified by the user.
     This function uses the json library.
 
-    parameters:
+    Args:
         results (List[Dict[str, Any]]): results to write to the file.
         file_path (Path): path to where the output file should be written.
-    returns:
+
+    Returns:
         List[Dict[str, Any]: The results passed to the function.
-    raises:
+
+    Raises:
         FileNotFoundError: If the path to the file does not exist.
     """
+    search_time = dt.now().strftime("%y%m%d%H%M%S")
+    search_out_dir = f"{pipeline.config["data_path"]}/search_results/{search_name}"
     try:
-        with open(file_path, "w") as f:
+        with open(search_out_dir, "w") as f:
             json.dump(results, f, indent=4)
-        logger.info(f"Wrote search results to {file_path}")
+        logger.info(f"Wrote search results to {search_out_dir}")
     except TypeError as e:
-        logger.error(f"Failed to write results to {file_path}: {e}")
+        logger.error(f"Failed to write results to {search_out_dir}: {e}")
         raise
     except IOError as e:
-        logger.error(f"Failed to write results to {file_path}: {e}")
+        logger.error(f"Failed to write results to {search_out_dir}: {e}")
         raise
 
     return results

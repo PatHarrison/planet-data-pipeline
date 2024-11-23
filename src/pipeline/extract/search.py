@@ -38,7 +38,6 @@ class SearchHandler():
             None
         """
         self.auth = auth
-        self.searchs = asyncio.run(self._get_searches())
 
     async def make_search(self, name: str, search_filter: Dict[Any, Any],
                           item_types: List[str], enable_email=False
@@ -60,7 +59,7 @@ class SearchHandler():
         Raises:
             APIError: If an error is encounted with the API.
             ClientError: Invalid request sent to Planet.
-            Exception: Unexpected error setting up the client
+            Exception: Unexpected error setting up the Session.
         """
         logger.info(f"Making a new search: {name}")
         try:
@@ -74,13 +73,14 @@ class SearchHandler():
                                                      enable_email=enable_email
                                                      )
                     logger.info(f"Search Created {request['name']}")
+                    logger.debug(request)
                     return request
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")
-                    return {}
+                    raise
                 except ClientError as e:
                     logger.error(f"Error with request to Planet API: {e}")
-                    return {}
+                    raise
         except Exception as e:
             logger.error(f"An Unexpected error occured: {e}")
             raise
@@ -119,13 +119,14 @@ class SearchHandler():
                                                      enable_email
                                                      )
                     logger.info(f"Updated the search {search_id}")
+                    logger.debug(search)
                     return search
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")
-                    return {}
+                    raise
                 except ClientError as e:
                     logger.error(f"Error with request to Planet API: {e}")
-                    return {}
+                    raise
         except Exception as e:
             logger.error(f"An Unexpected error occured: {e}")
             raise
@@ -155,13 +156,14 @@ class SearchHandler():
                     items = cl.run_search(search_id=search_id, limit=0)
                     item_list = [i async for i in items]
                     logger.info(f"Search done found {len(item_list)} images")
+                    logger.debug(item_list)
                     return item_list
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")
-                    return [{}]
+                    raise
                 except ClientError as e:
                     logger.error(f"Error with request to Planet API: {e}")
-                    return [{}]
+                    raise
         except Exception as e:
             logger.error(f"An Unexpected error occured: {e}")
             raise

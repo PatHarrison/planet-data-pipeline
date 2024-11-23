@@ -144,16 +144,17 @@ def main():
                    ).build()
 
     searches = SearchHandler(auth=auth)
-    request = asyncio.run(searches.make_search(name="SiteCFilling", 
+    search_name = (f"SiteCFilling_"
+                   f"{date_range[0].strftime("%Y%m%d_%H%M%S")}_"
+                   f"{date_range[1].strftime("%Y%m%d_%H%M%S")}"
+                )
+    request = asyncio.run(searches.make_search(name=search_name, 
                                                search_filter=filter_dict,
                                                item_types=item_types)
                           )
     images = asyncio.run(searches.perform_search(request["id"]))
     
-    search_time = dt.now().strftime("%y%m%d%H%M%S")
-    search_name = f"{request["name"]}_{request["id"]}_{search_time}.geojson"
-    search_out_dir = f"{pipeline.config["data_path"]}/search_results/{search_name}"
-    write_results(images, Path(os.getcwd()) / search_out_dir)
+    write_results(images, search_name)
     
     results = group_images_by_date(images, aoi, crs)
 
