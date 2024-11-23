@@ -1,5 +1,5 @@
 """
-Title: Data
+Title: Planet Data Pipeline
 Project: planet-data-pipeline
 Authors:
     - Patrick Harrison
@@ -14,8 +14,10 @@ import logging
 import os
 import sys
 from datetime import datetime as dt
+from typing import Any, Dict, Tuple, Literal
 from pathlib import Path
-from typing import Tuple, Literal
+
+from planet import Auth
 
 import pipeline
 from pipeline.utils import read_geojson, write_results, group_images_by_date
@@ -23,14 +25,29 @@ from pipeline.extract.filters import FilterBuilder
 from pipeline.extract.search import SearchHandler
 from pipeline.extract.order import concurrent_planet_order, run_concurrent_image_fetch
 
-
 logger = logging.getLogger("pipeline")
+
 
 LogLevelType = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
 def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
-    """Parse Command-line arguments for the search stats script."""
+    """
+    Parse Command-line arguments for the search stats script.
+    This parser sets up a script description as well as a checks the 
+    validity of arguments. The script will exit with an error after 
+    printing a slighlty helpful message.
+
+    Args:
+        None
+
+    Returns:
+        Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]: arguments for the
+            script as apikey, aoi, loglevel, start date, end date.
+
+    Raises:
+        None: Will exit as failure (1) if unable to parse passed arguments.
+    """
     parser = argparse.ArgumentParser(
                 description=("Finder for planet images in a certain date range"
                              " and other filters. Search results are written"
@@ -74,17 +91,16 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
     try:
         study_area: Path = Path(args.aoi)
         if not study_area.exists():
-            raise FileNotFoundError(f"Cannot find {study_area}")
+            print(f"Cannot find {study_area}")
+            sys.exit(1)
         elif not study_area.is_file():
-            raise IsADirectoryError(f"The path {study_area} is a directory, not a file")
+            print(f"The path {study_area} is a directory, not a file")
+            sys.exit(1)
     except (FileNotFoundError, IsADirectoryError) as e:
         logger.error(f"Error setting study area: {e}")
         sys.exit(1)
     except ValueError as e:
         logger.error(f"Invalid Path to AOI {e}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"An unexpected error occured setting up AOI with {study_area}. {e}")
         sys.exit(1)
 
     if not args.apikey:
@@ -103,22 +119,21 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
 
     return args.apikey, study_area, args.loglevel, date_range, args.crs
 
-
 def main():
+
     api_key, aoi, log_level, date_range, crs = parse_arguments()
 
-    # Overwrite logging levels with user specficed
     pipeline.config["log_level"] = log_level
     pipeline.config["api_key"] = api_key
     pipeline.config["data_path"] = Path(os.getcwd()) / "data"
     pipeline.initialize()
     logger.info(f"starting {__file__} with: API key {api_key}")
 
-    # Setup the session
-    logger.info("Setting up the session with the API Key")
-
     aoi_feature = read_geojson(aoi)
     aoi = [{"geometry": aoi_feature, "properties": None}]
+
+    auth = Auth.from_key(api_key)
+
 
     item_types = ["PSScene"]
     filter_builder = FilterBuilder("And")
@@ -127,9 +142,10 @@ def main():
                    .add_cloud_cover_filter((0,0.15))
                    .add_std_quality_filter()
                    .add_geometry_filter(aoi_feature)
+                   .add_permission_filter()
                    ).build()
 
-    searches = SearchHandler()
+    searches = SearchHandler(auth=auth)
     # del_searches = asyncio.run(
     #         searches.delete_search(asyncio.run(searches._get_searches())))
     # print(del_searches)
@@ -138,7 +154,7 @@ def main():
                                                item_types=item_types)
                           )
     images = asyncio.run(searches.perform_search(request["id"]))
-
+    
     search_time = dt.now().strftime("%y%m%d%H%M%S")
     search_name = f"{request["name"]}_{request["id"]}_{search_time}.geojson"
     search_out_dir = f"{pipeline.config["data_path"]}/search_results/{search_name}"
@@ -156,31 +172,12 @@ def main():
     if order_flag.upper() == "Y":
         logger.info(f"Continuing to Ordering")
         tasks = [
-                concurrent_planet_order(row, crs, aoi_feature)
+                concurrent_planet_order(row, crs, aoi_feature, auth)
                 for row in full_cov[["ids", "date"]].itertuples(index=False)
         ]
 
         asyncio.run(run_concurrent_image_fetch(tasks))
-        # for row in full_cov[["ids", "date"]].itertuples(index=False):
-        #     request = (OrderBuilder("SiteCFilling")
-        #                .add_product(row.ids,
-        #                             "analytic_8b_sr_udm2",
-        #                             "PSScene")
-        #                .add_reproject_tool(crs)
-        #                .add_clip_tool(aoi_feature)
-        #                .add_composite_tool()
-        #                .add_delivery_config(archive_type="zip",
-        #                                     single_archive=True,
-        #                                     archive_filename="{}.zip".format(row.date.replace("-",""))
-        #                                     )
-        #             )
-        #     request_json = request.build()
-        #
-        #     order = OrderHandler(request_json).create_poll_and_download()
-        #     logger.info(f"Downloaded order to {order}")
-
-    sys.exit(pipeline.deactivate())
-
 
 if __name__ == "__main__":
     main()
+

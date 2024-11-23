@@ -24,15 +24,16 @@ logger = logging.getLogger("pipeline")
 
 class SearchHandler():
     """Search Handler for planet API searches."""
-    def __init__(self):
+    def __init__(self, auth):
         """Constructor will get a list of saved searches.
         parameters:
-            None
+            auth (Auth): Planet Auth object
         returns:
             None
         raises:
             None
         """
+        self.auth = auth
         self.searchs = asyncio.run(self._get_searches())
 
     async def _get_searches(self) -> List[str]:
@@ -49,7 +50,7 @@ class SearchHandler():
             Exception: Unexpected error setting up the client
         """
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 cl = sess.client("data")
                 try:
                     searches = cl.list_searches()
@@ -82,7 +83,7 @@ class SearchHandler():
             Exception: Unexpected error setting up the client
         """
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 cl = sess.client("data")
                 try:
                     for search in search_id:
@@ -121,7 +122,7 @@ class SearchHandler():
         """
         logger.info(f"Making a new search: {name}")
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 try:
                     logger.info(f"Starting Session to make search")
                     cl = sess.client("data")
@@ -166,7 +167,7 @@ class SearchHandler():
         """
         logger.info(f"Updating Search {search_id}")
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 cl = sess.client("data")
                 try:
                     search =  await cl.update_search(search_id, item_types, 
@@ -201,7 +202,7 @@ class SearchHandler():
         """
         logger.info(f"Starting Search {search_id}")
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 try:
                     cl = sess.client("data")
                     items = cl.run_search(search_id=search_id, limit=0)

@@ -7,6 +7,8 @@ Authors:
 Purpose:
     This module contains the filter builder class
     to create planet api filter requests segments.
+    Not all available filters are implemented in the
+    filter builder however enough are for our purposes.
 
     Classes
         - FilterBuilder
@@ -182,4 +184,18 @@ class FilterBuilder:
             )
         )
         return self
+
+    def add_permission_filter(self) -> FilterBuilder:
+        """Builds a permission filter
+
+        parameters:
+            None
+        returns:
+            None
+        """
+        self.filters.append(
+                data_filter.permission_filter()
+        )
+        return self
+        
 

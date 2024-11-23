@@ -15,154 +15,152 @@ Purpose:
         - indent
         - read_geojson
 """
+import logging
 import os
 import json
-import logging
+from datetime import datetime as dt
+from typing import Any, Dict, List
 import logging.config
 from pathlib import Path
-from typing import Any, Dict, List
-from datetime import datetime as dt
 
 import geopandas as gpd
-from planet import reporting
-
-from pipeline.extract.order import OrderHandler
 
 
 logger = logging.getLogger("pipeline")
 
 
-def setup_data_path(path: Path):
-    """Setups up a directory to store data at path.
-
-    parameters:
-        path (Path): The directory where the data should be stored.
-    returns:
-        None
-    raises:
-        OSError: If there is an issue creating the directory
+def setup_data_paths(path: Path) -> Path:
     """
-    try:
-        path.mkdir(exist_ok=True)
-    except NotADirectoryError as e:
-        logger.error(f"Error creating data directory. {e}")
-        raise
-    except OSError as e:
-        logger.error(f"Error creating the data directory {path}: {e}")
-        raise
+    Setups up a directory to store data with sub directories.
+
+    Args:
+        path (Path): Path to the data directory
+
+    Returns:
+        None
+    
+    Raises:
+        ValueError: If log_directory is not a Path object.
+        FileExistsError: If logging directory exists as a file.
+        OSError: Error from OS when trying to create directory
+    """
+    if not isinstance(path, Path):
+        raise ValueError("Data path given must be of type Path not {path}")
+    path.mkdir(exist_ok=True, parents=True) 
 
     # Fill out data sub directories
     search_results_dir = path / "search_results"
-    try:
-        search_results_dir.mkdir(exist_ok=True)
-    except OSError as e:
-        logger.error(f"Error creating the data directory {search_results_dir}: {e}")
+    search_results_dir.mkdir(exist_ok=True, parents=True)
 
     images_dir = path / "images"
-    try:
-        images_dir.mkdir(exist_ok=True)
-    except OSError as e:
-        logger.error(f"Error creating the data directory {images_dir}: {e}")
+    images_dir.mkdir(exist_ok=True, parents=True)
 
+    return path
+
+
+def create_log_path(log_directory: Path) -> Path:
+    """
+    Creates a logging directory to store pipeline logs.
+    The function will create all non-existent parent directories
+    if the do not exist yet. If the logging directory exists it
+    will pass creating a copy or overwritting existing logs.
     
-def setup_logging(log_directory: Path=Path("logs"), level: str="DEBUG"):
-    """Sets up logging for the pipeline application.
+    Args:
+        log_directory (Path): Path to the logging directory
+
+    Returns:
+        (Path): Path to the created logging directory.
+
+    Raises:
+        ValueError: If log_directory is not a Path object.
+        FileExistsError: If logging directory exists as a file.
+        OSError: Error from OS when trying to create directory
+    """
+    if not isinstance(log_directory, Path):
+        raise ValueError(f"Data path given must be of type Path not {log_directory}")
+    log_directory.mkdir(exist_ok=True, parents=True) 
+
+    return log_directory
+
+
+def setup_logging(log_dir: Path, level: str="DEBUG"):
+    """
+    Sets up logging for the pipeline application.
     This function configures logging for the application including
     creating a log directory (if it does not exist) and generates a
     time stamped log file name. Log levels can also be passed here.
+    If creating the log store fails, then the cwd will be used.
 
-    parameters:
+    Args:
         log_directory (Path): The directory where the log files should be
-                              stored. The default is 'logs/'
+            stored. The default is 'logs/'
         level (str): The log level string representation for the logging
-                     Currently, only one log level is supported for all
-                     handlers
-    returns:
+             Currently, only one log level is supported for all handlers.
+
+    Returns:
         None
-    raises:
-        FileNotFoundError: If the logging configuration file cannot be found.
-        json.JSONDecodeError: If the logging configuration file is not a valid
-                              JSON.
-        KeyError: If the expected keys are not present in the logging config
-                  file.
-        OSError: If there is an issue creating the directory
+
+    Raises:
+        KeyError: If the expected keys are not present in the logging config 
+            file.
     """
+    log_directory = Path(os.getcwd())
     try:
-        log_directory.mkdir(exist_ok=True) # log directory
-    except OSError as e:
-        print(f"Error creating the logging directory. Storing logs in root.")
-        log_directory = Path(os.getcwd())
+        log_directory = create_log_path(log_dir)
+    except Exception as e:
+        print(f"Error creating logging config. defaulting to cwd. {e}")
 
     timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_directory / f"pylanet_{timestamp}.log"
 
-    # read logging_conf.json
-    config_path = Path(os.getcwd()) / "logging_config.json"
+    config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "%(asctime)s [%(name)-8.8s] [%(levelname)-7.7s]   %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+            "detailed": {
+                "format": "%(asctime)s [%(name)-8.8s] [%(levelname)-7.7s]  %(module)s.%(funcName)s | %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            }
+        },
+        "handlers": {
+            "consoleHandler": {
+                "class": "logging.StreamHandler",
+                "level": "DEBUG",
+                "formatter": "standard"
+            },
+            "fileHandler": {
+                "class": "logging.FileHandler",
+                "level": "DEBUG",
+                "formatter": "detailed",
+                "filename": "pylanet.log"
+            }
+        },
+        "loggers": {
+            "pipeline": {
+                "level": "DEBUG",
+                "handlers": ["fileHandler"],
+                "propagate": False
+            }
+        }
+    }
 
-    try:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-            config["handlers"]["fileHandler"]["filename"] = log_file
-            config["loggers"]["pipeline"]["level"] = level
-            config["handlers"]["fileHandler"]["level"] = level
-            config["handlers"]["consoleHandler"]["level"] = level
-            logging.config.dictConfig(config)
-
-    except FileNotFoundError:
-        print(f"The logging configuration file '{config_path}' was not found")
-        raise
-    except json.JSONDecodeError:
-        print(f"Failed to decode JSON in {config_path}")
-        raise
-    except KeyError as e:
-        print(f"Error: Missing expected key in logging config: {e}")
-        raise
-
-
-def indent(data: Dict[Any, Any]):
-    """Pretty printing for dictionary data.
-    Prints the dictionary to stdout with and indent level for
-    human readablilty. Uses json.dumps method to convert the
-    dictionary to valid JSON
-
-    parameters:
-        data (Dict): Data dictionary to be printed nicely.
-    returns:
-        None
-    Raises:
-        TypeError: If the provided data is not a dict. 
-        json.JSONDecodeError: If the data cannot be converted into
-                              a dictionary
-    """
-    try:
-        print(json.dumps(data, indent=2))
-    except TypeError as e:
-        logging.warning(f"Unable to print {data} in JSON form. {e}")
-    except json.JSONDecodeError as e:
-        logging.error(f"JSON encoding error: {e}")
-
-
-def authenticate(api_key: str) -> str:
-    """Stores API in environment variable.
-    
-    parameter:
-        api_key (str): Planet API key for authentication.
-    returns
-        str: Planet API key for authentication from environment vars.
-    """
-    if "PL_API_KEY" in os.environ:
-        auth = os.environ["PL_API_KEY"]
-    else:
-        os.environ["PL_API_KEY"] = api_key
-        auth = os.environ["PL_API_KEY"]
-    return auth
+    config["handlers"]["fileHandler"]["filename"] = log_file
+    config["loggers"]["pipeline"]["level"] = level
+    config["handlers"]["fileHandler"]["level"] = level
+    config["handlers"]["consoleHandler"]["level"] = level
+    logging.config.dictConfig(config)
 
 
 def read_geojson(file_path: Path) -> Dict[str, Any]:
-    """Reads a GeoJSON file and returns its contents as a dictionary.
-    Checks if 'features' and 'geometry' keys are present in the file
-    before attempting returning dictionary. An empty dictionary is
-    returned if the file is unreachable or invalid.
+    """
+    Reads a GeoJSON file and returns its contents as a dictionary.
+    Checks if 'features' and 'geometry' keys are present in the file before 
+    attempting returning dictionary. An empty dictionary is returned if the 
+    file is unreachable or invalid.
 
     Parameters:
         file_path (Path): Path to the GeoJSON file to read.
@@ -174,7 +172,6 @@ def read_geojson(file_path: Path) -> Dict[str, Any]:
         FileNotFoundError: If the specified file cannot be found.
         json.JSONDecodeError: If the file contains invlaud JSON.
         KeyError: if the expected 'features' or 'geometry' is missing.
-        Exception: If an unexpected error occurs.
     """
     try:
         with open(file_path, 'r', encoding="utf-8") as geojson_file:
@@ -188,23 +185,17 @@ def read_geojson(file_path: Path) -> Dict[str, Any]:
                 return geometry
             else:
                 logger.error(f"Geometry data not found in the first feature of {file_path}")
-                return {}
+                raise KeyError
         else:
             logger.error(f"Features data not found in {file_path}")
-            return {}
+            raise KeyError("No features found in gson")
 
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
-        return {}
+        raise
     except json.JSONDecodeError:
         logger.error(f"Error decoding JSON in file: {file_path}")
-        return {}
-    except KeyError as e:
-        logger.error(f"Missing key in GeoJSON data: {e}")
-        return {}
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
-        return {}
+        raise
 
 
 def overlap_percent(aoi: List[Dict[str, Any]],

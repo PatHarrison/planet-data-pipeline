@@ -1,48 +1,33 @@
-import os
 import logging
 from pathlib import Path
+from typing import Any, Dict
 
-from .utils import setup_logging, authenticate, setup_data_path
+from .utils import setup_data_paths, setup_logging
 
 
 logger = logging.getLogger("pipeline")
 
 config = {
-    "log_level": "DEBUG",
-    "log_path": Path("logs"),
-    "data_path": Path(os.getcwd()) / "data",
-    "api_key": None
+        "log_level": "DEBUG",
+        "log_path": Path("logs"),
+        "data_path": Path("data"),
+        "api_key": None
 }
 
-def initialize(config=config):
-    """Initialize Pylanet project"""
-    setup_logging(config["log_path"], level=config["log_level"])
-    authenticate(api_key=config["api_key"])
-    setup_data_path(path=config["data_path"])
-
-
-def deactivate() -> int:
-    """Deletes the api key from the environment.
-
-    parameters:
-        None
-    returns:
-        int: 0 if successful, 1 if error deleteing `PL_API_KEY`
-    raises:
-        KeyError: If PL_API_KEY is not in environment.
-        PermissionError: If the user does not have permission to pop 
-                         enivornment variables.
-        OSError: If there was trouble reading or popping environment variables.
+def initialize(config: Dict[str, Any]=config):
     """
-    try:
-        os.environ.pop("PL_API_KEY")
-        logger.info(f"Removed PL_API_KEY from environment variables")
-    except KeyError as e:
-        logger.warning(f"PL_API_KEY not found in environment. Failed to remove: {e}")
-        return 1
-    except PermissionError as e:
-        logger.warning(f"You do not have permision to remove PL_API_KEY from environment: {e}")
-    except OSError as e:
-        logger.warning(f"Error removing PL_API_KEY from environment. Environment table may be corrupted. {e}")
-        return 1
-    return 0
+    Initialize the pipeline.
+
+    Args:
+        config (Dict[str, Any]): General configuration of the pipeline.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
+    setup_logging(config["log_path"], level=config["log_level"])
+    setup_data_paths(path=config["data_path"])
+
+    return True

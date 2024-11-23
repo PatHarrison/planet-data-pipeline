@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from planet import Session, OrdersClient
+from planet import Auth, Session, OrdersClient
 from planet.order_request import (
         build_request, product, composite_tool, reproject_tool, clip_tool, delivery
 )
@@ -177,7 +177,7 @@ class OrderBuilder():
 
 class OrderHandler():
     """Order Handler for Planet data"""
-    def __init__(self, request: Dict[str, Any]):
+    def __init__(self, request: Dict[str, Any], auth: Auth):
         """Constructor will get a list of saved orders.
 
         parameters:
@@ -188,6 +188,7 @@ class OrderHandler():
             None
         """
         self.request = request
+        self.auth = auth
         self.bar = reporting.StateBar(state="initialized")
 
     async def get_order(self, order_id: str) -> Dict[str, Any]:
@@ -203,12 +204,12 @@ class OrderHandler():
             Exception: Unexpected error setting up the client
         """
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 cl = OrdersClient(sess)
                 try:
                     order_details = await cl.get_order(order_id=order_id)
-                    logger.debug(f"Found the following order details for {order_id}")
-                    return order_details
+                    logger.debug(f"Found the following order details for {order_id}: {order_details}")
+
 
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")
@@ -233,7 +234,7 @@ class OrderHandler():
             Exception: Unexpected error setting up the client
         """
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 cl = OrdersClient(sess)
                 try:
                     with self.bar as bar:
@@ -244,9 +245,10 @@ class OrderHandler():
 
                         await cl.wait(order_details["id"], 
                                       callback=bar.update_state,
+                                      delay=11,
                                       max_attempts=0) # default 200 usually times out before getting to download and script will fail. 0=no limit
 
-                        return order_details
+                    return order_details
 
                 except APIError as e:
                     logger.error(f"Error accessing Planet API: {e}")
@@ -283,7 +285,7 @@ class OrderHandler():
         dir = directory if directory is not None else pipeline.config["data_path"] / "images"
 
         try:
-            async with Session() as sess:
+            async with Session(auth=self.auth) as sess:
                 cl = OrdersClient(sess)
                 try:
                     files = await cl.download_order(order_id=order_id,
@@ -308,11 +310,13 @@ class OrderHandler():
         """Full create poll and download of an order.
         """
         order = await self._create_order(self.request)
+        logger.info(f"Found order: {order}")
         download_paths = await self._download_order(order["id"])
+
         return download_paths
 
 
-async def concurrent_planet_order(row, crs, aoi_feature):
+async def concurrent_planet_order(row, crs, aoi_feature, auth):
     request = (OrderBuilder("SiteCFilling")
                .add_product(row.ids,
                             "analytic_8b_sr_udm2",
@@ -327,7 +331,7 @@ async def concurrent_planet_order(row, crs, aoi_feature):
             )
     request_json = request.build()
 
-    order = await OrderHandler(request_json).create_poll_and_download()
+    order = await OrderHandler(request_json, auth=auth).create_poll_and_download()
     logger.info(f"Downloaded order to {order}")
 
 async def run_concurrent_image_fetch(tasks):
