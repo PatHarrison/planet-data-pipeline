@@ -115,6 +115,10 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
     return args.apikey, study_area, args.loglevel, date_range, args.crs
 
 def main():
+    """
+    Entry point for pylanet script.
+    Runs the search and the orders from the planet API.
+    """
 
     api_key, aoi, log_level, date_range, crs = parse_arguments()
 

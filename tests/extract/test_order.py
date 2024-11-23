@@ -1,7 +1,6 @@
 from planet import OrdersClient
 
 from pipeline.extract.order import OrderBuilder, OrderHandler
-from pipeline.utils import indent
 
 
 
@@ -83,6 +82,5 @@ class TestOrderBuilder():
                                         archive_filename="{{order_id}}.zip"
                                         )
                      ).build()
-        indent(order_seg)
 
         assert order_seg == expected_order_seg
