@@ -153,7 +153,6 @@ def main():
                                                item_types=item_types)
                           )
     images = asyncio.run(searches.perform_search(request["id"]))
-    
     write_results(images, search_name)
     
     results = group_images_by_date(images, aoi, crs)
