@@ -11,10 +11,11 @@ config = {
         "log_level": "DEBUG",
         "log_path": Path("logs"),
         "data_path": Path("data"),
-        "api_key": None
+        "image_dir_name": "imagedir",
+        "search_dir_name": "search_results",
 }
 
-def initialize(config: Dict[str, Any]=config):
+def initialize(new_config: Dict[str, Any]=config):
     """
     Initialize the pipeline.
 
@@ -27,7 +28,15 @@ def initialize(config: Dict[str, Any]=config):
     Raises:
         None
     """
-    setup_logging(config["log_path"], level=config["log_level"])
-    setup_data_paths(path=config["data_path"])
+    global config
+    if new_config:
+        config.update(new_config)
+
+    setup_logging(new_config["log_path"], level=new_config["log_level"])
+    setup_data_paths(path=new_config["data_path"],
+                     images_dir_name=new_config["image_dir_name"],
+                     search_dir_name=new_config["search_dir_name"]
+                     )
+
 
     return True

@@ -11,7 +11,6 @@ Purpose:
     Classes:
         - SearchHandle
 """
-import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -85,52 +84,6 @@ class SearchHandler():
             logger.error(f"An Unexpected error occured: {e}")
             raise
 
-    async def update_search(self, search_id: str, name: str, 
-                            item_types: List[str], search_filter: Dict[str, Any],
-                            enable_email=False
-                            ) -> Dict[str, Any]:
-        """
-        Updates the search matching the search_id.
-        Uses the update_search from the data client to update the search
-        passed by the search_id. The function will return the updated search.
-
-        Args:
-            search_id (str): The search id fo the search to be updated.
-            name (str): New name for the search.
-            item_types (List[str]): New item types for the search.
-            search_filter (dict[str, Any]): New filters for the search.
-            enable_email (bool): Whether to send email notifications for the
-                                 search.
-        Returns:
-            Dict[str, Any]: New updated search json.
-
-        Raises:
-            APIError: If an error is encounted with the API.
-            ClientError: Invalid request sent to Planet.
-            Exception: Unexpected error setting up the client
-        """
-        logger.info(f"Updating Search {search_id}")
-        try:
-            async with Session(auth=self.auth) as sess:
-                cl = sess.client("data")
-                try:
-                    search =  await cl.update_search(search_id, item_types, 
-                                                     search_filter, name, 
-                                                     enable_email
-                                                     )
-                    logger.info(f"Updated the search {search_id}")
-                    logger.debug(search)
-                    return search
-                except APIError as e:
-                    logger.error(f"Error accessing Planet API: {e}")
-                    raise
-                except ClientError as e:
-                    logger.error(f"Error with request to Planet API: {e}")
-                    raise
-        except Exception as e:
-            logger.error(f"An Unexpected error occured: {e}")
-            raise
-
 
     async def perform_search(self, search_id=str) -> List[Dict[str, Any]]:
         """
@@ -163,7 +116,7 @@ class SearchHandler():
                     raise
                 except ClientError as e:
                     logger.error(f"Error with request to Planet API: {e}")
-                    raise
+
         except Exception as e:
             logger.error(f"An Unexpected error occured: {e}")
             raise

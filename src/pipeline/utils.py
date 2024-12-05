@@ -24,6 +24,7 @@ import logging.config
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 
 import pipeline
 
@@ -31,9 +32,11 @@ import pipeline
 logger = logging.getLogger("pipeline")
 
 
-def setup_data_paths(path: Path) -> Path:
+def setup_data_paths(path: Path, images_dir_name: str, search_dir_name: str) -> Path:
     """
-    Setups up a directory to store data with sub directories.
+    Setups up a directory to store data with sub directories for image orders
+    and search results. All parent directories of data path will be
+    created if they do not exist.
 
     Args:
         path (Path): Path to the data directory
@@ -42,19 +45,16 @@ def setup_data_paths(path: Path) -> Path:
         None
     
     Raises:
-        ValueError: If log_directory is not a Path object.
         FileExistsError: If logging directory exists as a file.
         OSError: Error from OS when trying to create directory
     """
-    if not isinstance(path, Path):
-        raise ValueError("Data path given must be of type Path not {path}")
     path.mkdir(exist_ok=True, parents=True) 
 
     # Fill out data sub directories
-    search_results_dir = path / "search_results"
+    search_results_dir = path / search_dir_name
     search_results_dir.mkdir(exist_ok=True, parents=True)
 
-    images_dir = path / "images"
+    images_dir = path / images_dir_name
     images_dir.mkdir(exist_ok=True, parents=True)
 
     return path
@@ -74,12 +74,9 @@ def create_log_path(log_directory: Path) -> Path:
         (Path): Path to the created logging directory.
 
     Raises:
-        ValueError: If log_directory is not a Path object.
         FileExistsError: If logging directory exists as a file.
         OSError: Error from OS when trying to create directory
     """
-    if not isinstance(log_directory, Path):
-        raise ValueError(f"Data path given must be of type Path not {log_directory}")
     log_directory.mkdir(exist_ok=True, parents=True) 
 
     return log_directory
@@ -159,18 +156,16 @@ def setup_logging(log_dir: Path, level: str="DEBUG"):
 
 def read_geojson(file_path: Path) -> Dict[str, Any]:
     """
-    Reads a GeoJSON file and returns its contents as a dictionary.
+    Reads a GeoJSON file and returns the first feature.
     Checks if 'features' and 'geometry' keys are present in the file before 
-    attempting returning dictionary. An empty dictionary is returned if the 
-    file is unreachable or invalid.
+    attempting returning dictionary.  
 
     Args:
         file_path (Path): Path to the GeoJSON file to read.
 
     Returns:
         Dict[str, Any]: dictionary representation of the geometry of the first
-                        feature in the GeoJSON file. Returns an empty dictionay
-                        if an error occurs or if the geometry data is missing.
+            feature in the GeoJSON file. 
 
     Raises:
         FileNotFoundError: If the specified file cannot be found.
@@ -186,7 +181,7 @@ def read_geojson(file_path: Path) -> Dict[str, Any]:
         if "features" in geojson_data and geojson_data["features"]:
             geometry = geojson_data["features"][0].get("geometry")
             if geometry is not None:
-                return geometry
+                return geojson_data["features"][0]
             else:
                 logger.error(f"Geometry data not found in the first feature of {file_path}")
                 raise KeyError
@@ -251,7 +246,9 @@ def overlap_percent(aoi: List[Dict[str, Any]],
     return coverage_percentage
 
 
-def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[str, Any]], crs: str|int) -> gpd.GeoDataFrame:
+def group_images_by_date(results: List[Dict[str, Any]], 
+                         aoi: Path,
+                         crs: str|int) -> pd.DataFrame:
     """
     Puts the results from a search into a geodataframe.
     This functions makes an intial dataframe of id, date, coverage and geometry
@@ -273,6 +270,7 @@ def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[s
                                  crs="EPSG:4326", 
                                  geometry="geometry"
                                  )
+    # Add image data
     for image in results:
         row = {"id": image["id"],
                "date": dt.strptime(image["properties"]["acquired"], 
@@ -282,16 +280,33 @@ def group_images_by_date(results: List[Dict[str, Any]], aoi_feature: List[Dict[s
         }
         images_df = images_df._append(row,ignore_index=True)
 
+    # Group by date
     images_df = images_df.groupby("date")["id"].apply(list).reset_index()
     images_df = images_df.rename(columns={"id": "ids"})
 
+    # Calculate coverage by date
     images_df["coverage"] = images_df["ids"].apply(
-            lambda ids: overlap_percent(aoi_feature, 
+            lambda ids: overlap_percent([read_geojson(aoi)], 
                                         [image for image in results if image["id"] in ids],
                                         epsg=crs)
     ) 
 
+    # Show number of images
+    images_df["num_images"] = images_df["ids"].apply(len)
+
     return images_df
+
+
+def filter_minimum_images_to_cover_aoi(aoi: Path, images: List[Dict[str, Any]]):
+
+    aoi = gpd.read_file(aoi)
+
+    if not aoi.crs == images.crs:
+        aoi = aoi.to_crs(iimages.crs)
+
+    aoi_geom = aoi.unary_union
+
+    images["coverage_area"]
 
 
 def write_results(results: List[Dict[str, Any]], search_name: str) -> List[Dict[str, Any]]:
@@ -311,7 +326,7 @@ def write_results(results: List[Dict[str, Any]], search_name: str) -> List[Dict[
         FileNotFoundError: If the path to the file does not exist.
     """
     search_time = dt.now().strftime("%y%m%d%H%M%S")
-    search_out_dir = f"{pipeline.config["data_path"]}/search_results/{search_name}"
+    search_out_dir = f"{pipeline.config["data_path"]}/{pipeline.config["search_dir_name"]}/{search_name}_{search_time}.json"
     try:
         with open(search_out_dir, "w") as f:
             json.dump(results, f, indent=4)

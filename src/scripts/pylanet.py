@@ -10,8 +10,9 @@ Purpose:
 """
 import asyncio
 import argparse
+import configparser
 import os
-import sys
+from argparse import Namespace
 from datetime import datetime as dt
 from typing import Any, Dict, Tuple, Literal
 from pathlib import Path
@@ -25,11 +26,78 @@ from pipeline.extract.search import SearchHandler
 from pipeline.extract.order import concurrent_planet_order, run_concurrent_image_fetch
 
 
-# Type Definitions
-LogLevelType = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+def parse_configuration(config_file: Path) -> Dict[str, Any]:
+    """
+    Parses the configuration file for the pipeline.
+    Reads a config.ini file provided in the root directory of the repository.
+    Splits the configuration into the different sections and returns in a 
+    dicionary of the different config dictionares for the sections.
+    
+    Args:
+        config_file (Path): path to the configuration file.
+    
+    Returns:
+        Dict[str, Any]: Dictionary of configuration settings.
+
+    Raises:
+        RuntimeError: Raised when the configuration file is invalid
+    """
+    config = configparser.ConfigParser()
+
+    try:
+        config.read(config_file)
+    except configparser.Error as e:
+        raise RuntimeError(f"Error reading the configuration file: {e}")
+
+    def get_option(section, option, default=None, type_cast=None):
+        if config.has_section(section) and config.has_option(section, option):
+            value = config.get(section, option)
+            if type_cast:
+                try:
+                    return type_cast(value)
+                except ValueError as e:
+                    raise ValueError(f"Invalid value for '{section}.{option}': {value}. {e}")
+            return value
+        elif default is not None:
+            return default
+        else:
+            raise KeyError(f"Missing required configuration: '{section}.{option}'")  
 
 
-def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
+    pipeline_config = {
+            "log_level": get_option("pipeline", "loglevel", default="DEBUG"),
+            "log_path": Path(get_option("pipeline", "logpath", default="logs")), 
+            "data_path": Path(get_option("pipeline", "outdatadir", default="data")),
+            "image_dir_name": get_option("pipeline", "outimagedirname", default="images"),
+            "search_dir_name": get_option("pipeline", "outsearchresults", default="search_results")
+    }
+
+    delivery_config = {
+            "crs": get_option("pylanet.delivery", "outcrs", type_cast=int),
+            "order_name": get_option("pylanet.delivery", "ordername")
+    }
+
+    filters_config = {
+        "item_types": eval(get_option("pylanet.filters", "itemtypes", default="[]")),  # use eval to safely get list
+        "start_date": get_option("pylanet.filters", "startdate"),
+        "end_date": get_option("pylanet.filters", "enddate"),
+        "aoi": get_option("pylanet.filters", "aoi", default=None),
+        "min_cloud_cover": get_option("pylanet.filters", "mincloudcover", default=0.0, type_cast=float),
+        "max_cloud_cover": get_option("pylanet.filters", "maxcloudcover", default=1.0, type_cast=float),
+        "min_clear_percent": get_option("pylanet.filters", "minclearpercent", default=0.0, type_cast=float),
+        "max_clear_percent": get_option("pylanet.filters", "maxclearpercent", default=1.0, type_cast=float),
+        "permission_filter": get_option("pylanet.filters", "permissionfilter", default=True, type_cast=bool),
+        "std_quality_filter": get_option("pylanet.filters", "stdqualityfilter", default=True, type_cast=bool),
+        "instruments": eval(get_option("pylanet.filters", "instruments", default=None)),  # use eval to safely get list
+        "assests": eval(get_option("pylanet.filters", "assests", default=None)),  # use eval to safely get list
+        "required_coverage": get_option("pylanet.filters", "requiredcoverage", type_cast=float)
+    }
+
+    return {"pipeline": pipeline_config,
+            "delivery": delivery_config, 
+            "filters": filters_config}
+
+def parse_arguments() -> str:
     """
     Parse Command-line arguments for the search stats script.
     This parser sets up a script description as well as a checks the 
@@ -40,124 +108,63 @@ def parse_arguments() -> Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]:
         None
 
     Returns:
-        Tuple[str, Path, LogLevelType, Tuple[dt, dt], str]: arguments for the
-            script as apikey, aoi, loglevel, start date, end date.
+        str: apikey for planet.com api
 
     Raises:
         None: Will exit with argparse.error
     """
+    class Args(Namespace):
+        """Ensures Namespace of argparser is expected"""
+        apikey: str
+
     parser = argparse.ArgumentParser(
-                description=("Finder for planet images in a certain date range"
-                             " and other filters. Search results are written"
-                             " to a json file. Date filters are the first two"
-                             " positional arguments for the script in YYYY-MM"
-                             "-DD format. The script will find images with 0"
-                             "-15 percent cloud cover, Standard quality and"
-                             " intersecting the aoi.")
+                description=("Finder for planet images")
 
              )
     parser.add_argument(
-        "startdate",
-        type=str,
-        help="Start date in the form YYYY-MM-DD"
-    )
-    parser.add_argument(
-        "enddate",
-        type=str,
-        help="End date in the form YYYY-MM-DD"
-    )
-    parser.add_argument(
-        "--apikey", type=str, default=os.getenv("PL_API_KEY"),
+        str("apikey"), type=str, default=os.getenv("PL_API_KEY"),
         help="Your API key for accessing the Planet API."
     )
-    parser.add_argument(
-        "--aoi", type=str, required=True,
-        help="GeoJSON file path for your area of interest in WGS84"
-    )
-    parser.add_argument(
-        "--crs", type=str, required=True,
-        help="CRS to determine overlap percentage in."
-    )
-    parser.add_argument(
-        "--loglevel", default="DEBUG",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging level for the script."
-    )
+    args = parser.parse_args(namespace=Args)
+    apikey: str = args.apikey
 
-    args = parser.parse_args()
+    if not apikey:
+        parser.error("An API key is required for the planet pipeline.")
 
-    try:
-        study_area: Path = Path(args.aoi)
-        if not study_area.exists():
-            print(f"Cannot find {study_area}")
-            sys.exit(1)
-        elif not study_area.is_file():
-            print(f"The path {study_area} is a directory, not a file")
-            sys.exit(1)
-    except (FileNotFoundError, IsADirectoryError) as e:
-        parser.error(f"Error setting study area: {e}")
-    except ValueError as e:
-        parser.error(f"Invalid Path to AOI {e}")
+    return args.apikey
 
-    if not args.apikey:
-        parser.error("An API Key is required for Planet. Please provide as a"
-                     "system environment variable `PLANET_API_KEY` or as a "
-                     "parameter to the script.")
-    try:
-        date_range = (dt.strptime(args.startdate, "%Y-%m-%d"),
-                      dt.strptime(args.enddate, "%Y-%m-%d")
-                      )
-    except ValueError:
-        parser.error(f"Invlaid dates passed `{args.startdate}`,"
-                     f"`{args.enddate}` use YYYY-MM-DD Format"
-                     )
-
-    return args.apikey, study_area, args.loglevel, date_range, args.crs
 
 def main():
     """
     Entry point for pylanet script.
     Runs the search and the orders from the planet API.
     """
-
-    api_key, aoi, log_level, date_range, crs = parse_arguments()
-
-    pipeline.config["log_level"] = log_level
-    pipeline.config["api_key"] = api_key
-    pipeline.config["data_path"] = Path(os.getcwd()) / "data"
-    pipeline.initialize()
-
-    aoi_feature = read_geojson(aoi)
-    aoi = [{"geometry": aoi_feature, "properties": None}]
-
+    config = parse_configuration(Path("config.ini"))
+    api_key = parse_arguments()
     auth = Auth.from_key(api_key)
+    pipeline.initialize(config["pipeline"])
 
+    filters_config = config["filters"]
+    item_types = filters_config["item_types"]
+    filter_dict = FilterBuilder("And", filters_config).build()
 
-    item_types = ["PSScene"]
-    filter_builder = FilterBuilder("And")
-    filter_dict = (filter_builder
-                   .add_acquired_date_filter((date_range[0], date_range[1]))
-                   .add_cloud_cover_filter((0,0.15))
-                   .add_std_quality_filter()
-                   .add_geometry_filter(aoi_feature)
-                   .add_permission_filter()
-                   ).build()
-
-    searches = SearchHandler(auth=auth)
+    search_handler = SearchHandler(auth=auth)
     search_name = (f"SiteCFilling_"
-                   f"{date_range[0].strftime("%Y%m%d_%H%M%S")}_"
-                   f"{date_range[1].strftime("%Y%m%d_%H%M%S")}"
+                   f"{filters_config["start_date"].replace("-","")}_"
+                   f"{filters_config["end_date"].replace("-","")}"
                 )
-    request = asyncio.run(searches.make_search(name=search_name, 
+    search = asyncio.run(search_handler.make_search(name=search_name, 
                                                search_filter=filter_dict,
                                                item_types=item_types)
                           )
-    images = asyncio.run(searches.perform_search(request["id"]))
+    images = asyncio.run(search_handler.perform_search(search["id"]))
     write_results(images, search_name)
     
-    results = group_images_by_date(images, aoi, crs)
+    results = group_images_by_date(images, 
+                                   filters_config["aoi"], 
+                                   config["delivery"]["crs"])
 
-    full_cov = results[results["coverage"] >= 100.00]
+    full_cov = results[results["coverage"] >= filters_config["required_coverage"]]
     print(f"Number of days with full AOI coverage: {len(full_cov)}")
     print(f"Details:\n {full_cov.head(99)}")
 
@@ -166,7 +173,7 @@ def main():
 
     if order_flag.upper() == "Y":
         tasks = [
-                concurrent_planet_order(row, crs, aoi_feature, auth)
+                concurrent_planet_order(row, filters_config["crs"], aoi_feature, auth)
                 for row in full_cov[["ids", "date"]].itertuples(index=False)
         ]
 

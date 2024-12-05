@@ -42,6 +42,31 @@ pytest-asyncio.
 
 
 ## Configuration
+Configuration for the download is pulled from the `config.ini` file.
+This file specifies pipeline configuration like logging and output directories.
+Different filters can easily be set from the configuration file.
+An example configuration:
+
+```ini
+[pipeline]
+loglevel = DEBUG
+logpath = logs
+outdatadir = data
+outimagedirname = images
+outsearchresults = search_results
+
+[pylanet.filters]
+crs = 3005
+startdate = 2024-08-25
+enddate = 2024-11-10
+aoi = T083_R019_W6.geojson
+mincloudcover = 0
+maxcloudcover = 0.15
+permissionfilter = True
+stdqualityfilter = True
+
+requiredcoverage = 100.0
+```
 
 ### API Key
 To Access the Planet API, you will need to set up a planet account and API key.
@@ -49,14 +74,8 @@ The API key is availble under your profile settings on Planet.com
 
 The API key can be passed to the scripts:
 ```bash
-<script> --apikey <api_key> ...
+pylanet ... --apikey <api_key> ...
 ```
-The script will set the key as and environment variable in your `PATH` so
-that the pipeline can automatically authenticate the sessions.
-
-If you do not have permission to modify the environment variables on your
-machine, then the sessions can be authenticaed using a secret file in your
-home directory. This is not supported yet. 
 
 ### Logging
 logs will be created in a `logs/` directory at the root level of the repository.
@@ -79,7 +98,7 @@ to get more information of CLI options run:
 
 ### Example Commands
 ```bash
-pylanet 2024-08-25 2024-08-26 --apikey <api_key> --aoi T083_R019_W6.geojson --crs 3005 --loglevel INFO
+pylanet 2024-08-25 2024-08-26 --apikey <api_key> --aoi T084_R019_W6.geojson --crs 3005 --loglevel INFO
 ```
 
 ### Running Tests

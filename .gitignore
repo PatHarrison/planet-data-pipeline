@@ -24,8 +24,7 @@ dist/
 .eggs/
 
 # Configuration files
-*.env
-.env.*
+config.ini
 
 # Logs
 *.log

@@ -172,7 +172,7 @@ class OrderBuilder():
     def add_delivery_config(self, 
                             archive_type: str, 
                             single_archive: bool,
-                            archive_filename: str="{{order_id}}.zip"
+                            archive_filename: str="{{name}}.zip" # Name the parent order folder by order name
                             ) -> OrderBuilder:
         """
         Adds the delivery configuration segment of the request.
