@@ -297,18 +297,6 @@ def group_images_by_date(results: List[Dict[str, Any]],
     return images_df
 
 
-def filter_minimum_images_to_cover_aoi(aoi: Path, images: List[Dict[str, Any]]):
-
-    aoi = gpd.read_file(aoi)
-
-    if not aoi.crs == images.crs:
-        aoi = aoi.to_crs(iimages.crs)
-
-    aoi_geom = aoi.unary_union
-
-    images["coverage_area"]
-
-
 def write_results(results: List[Dict[str, Any]], search_name: str) -> List[Dict[str, Any]]:
     """
     Write the results of an API call to a file.

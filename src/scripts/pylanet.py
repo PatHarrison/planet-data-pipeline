@@ -145,8 +145,11 @@ def main():
     pipeline.initialize(config["pipeline"])
 
     filters_config = config["filters"]
+    delivery_config = config["delivery"]
     item_types = filters_config["item_types"]
     filter_dict = FilterBuilder("And", filters_config).build()
+
+    aoi_feature = read_geojson(filters_config["aoi"])
 
     search_handler = SearchHandler(auth=auth)
     search_name = (f"SiteCFilling_"
@@ -173,7 +176,7 @@ def main():
 
     if order_flag.upper() == "Y":
         tasks = [
-                concurrent_planet_order(row, filters_config["crs"], aoi_feature, auth)
+                concurrent_planet_order(row, delivery_config["crs"], aoi_feature, auth)
                 for row in full_cov[["ids", "date"]].itertuples(index=False)
         ]
 
