@@ -52,19 +52,28 @@ An example configuration:
 loglevel = DEBUG
 logpath = logs
 outdatadir = data
+; The follow will be put into `outdatadir` path
 outimagedirname = images
 outsearchresults = search_results
 
+[pylanet.delivery]
+outcrs = 3005
+ordername = SiteCFilling
+
+
 [pylanet.filters]
-crs = 3005
-startdate = 2024-08-25
-enddate = 2024-11-10
+itemtypes = ["PSScene"]
+startdate = 2024-11-04
+enddate = 2024-11-11
 aoi = T083_R019_W6.geojson
 mincloudcover = 0
-maxcloudcover = 0.15
+maxcloudcover = 1
+maxclearpercent = 100
+minclearpercent = 40
 permissionfilter = True
 stdqualityfilter = True
-
+instruments = ["PSB.SD", "PS2.SD", "PS2"]
+assests = ["ortho_analytic_8b_sr"]
 requiredcoverage = 100.0
 ```
 
@@ -74,7 +83,7 @@ The API key is availble under your profile settings on Planet.com
 
 The API key can be passed to the scripts:
 ```bash
-pylanet ... --apikey <api_key> ...
+pylanet <api_key>
 ```
 
 ### Logging
@@ -96,10 +105,6 @@ to get more information of CLI options run:
 <script> -h
 ```
 
-### Example Commands
-```bash
-pylanet 2024-08-25 2024-08-26 --apikey <api_key> --aoi T084_R019_W6.geojson --crs 3005 --loglevel INFO
-```
 
 ### Running Tests
 This pipeline uses pytest for unit and integration testing. To use pytest,
